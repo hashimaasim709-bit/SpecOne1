@@ -1,0 +1,40 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "specone-auto-labs",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Static files (fonts, icons, hashed JS/CSS bundles) are served straight from
+  // Cloudflare's edge without invoking the Worker.
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+
+  // Bundles the browser apps and compiles the SQL migrations before every dev/deploy.
+  "build": { "command": "node scripts/build.mjs", "watch_dir": ["client", "shared", "migrations"] },
+
+  // D1 (SQLite). Leave "database_id" out to let `wrangler deploy` create the database
+  // automatically, or run `npx wrangler d1 create specone` and paste the id here.
+  "d1_databases": [
+    { "binding": "DB", "database_name": "specone", "migrations_dir": "migrations" }
+  ],
+
+  // R2 holds photos, videos, the uploaded logo and the nightly encrypted backups.
+  // Remove this block to run without R2 (images fall back to the database; video
+  // uploads and cloud backups are then unavailable).
+  "r2_buckets": [
+    { "binding": "MEDIA", "bucket_name": "specone-media" }
+  ],
+
+  // Every 10 minutes: reminders, review requests, webhook retries.
+  // 03:15 UTC daily: encrypted database backup, subscription visits, housekeeping.
+  "triggers": { "crons": ["*/10 * * * *", "15 3 * * *"] },
+
+  "observability": { "enabled": true },
+
+  "vars": {
+    "APP_ENV": "production"
+  }
+
+  // Uncomment once the domain is on Cloudflare to attach it (SSL is issued automatically):
+  // "routes": [{ "pattern": "speconeautolabs.co.uk", "custom_domain": true }]
+}
