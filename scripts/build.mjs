@@ -75,7 +75,7 @@ async function main() {
     entryPoints: {
       site: 'client/site.ts',
       book: 'client/book.tsx',
-      track: 'client/track.ts',
+      track: 'client/track.tsx',
       account: 'client/account.tsx',
       admin: 'client/admin/main.tsx',
       'site-style': 'client/styles/site.css',

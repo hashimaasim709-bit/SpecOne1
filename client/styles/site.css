@@ -78,7 +78,7 @@ h1.display + .lead, h2.display + .lead, h2.display + p, h2.display + .muted { ma
 /* Tap ripple (#74) */
 .ripple { position: absolute; border-radius: 50%; transform: scale(0); background: currentColor; opacity: 0.22; pointer-events: none; animation: ripple 520ms var(--ease) forwards; }
 @keyframes ripple { to { transform: scale(2.6); opacity: 0; } }
-.btn, .chip, .card-link, .pkg { overflow: hidden; }
+.btn, .chip, .card-link, .pkg, .option, .svc, .slot, .cal-day, .zone-item { overflow: hidden; }
 
 /* ───────── Badges, chips, pills ───────── */
 .badge {
@@ -541,7 +541,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
 .cal-head b { font-family: var(--font-display); text-transform: uppercase; font-size: 1.25rem; letter-spacing: 0.04em; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
 .cal-dow { text-align: center; font-family: var(--font-mono); font-size: 0.66rem; color: var(--faint); padding: 4px 0; letter-spacing: 0.08em; }
-.cal-day { position: relative; aspect-ratio: 1; border-radius: 11px; border: 1px solid transparent; background: var(--surface-2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-family: var(--font-mono); font-weight: 600; font-size: 0.92rem; transition: all var(--dur) var(--ease); }
+.cal-day { position: relative; aspect-ratio: 1; max-height: 58px; width: 100%; border-radius: 11px; border: 1px solid transparent; background: var(--surface-2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-family: var(--font-mono); font-weight: 600; font-size: 0.92rem; transition: all var(--dur) var(--ease); }
 .cal-day:not([disabled]):hover { border-color: var(--line-3); }
 .cal-day[disabled] { opacity: 0.32; cursor: not-allowed; background: transparent; text-decoration: line-through; text-decoration-color: var(--faint); }
 .cal-day[aria-pressed='true'] { background: var(--accent); color: #fff; box-shadow: var(--accent-glow); }
