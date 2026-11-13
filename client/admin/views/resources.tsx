@@ -64,7 +64,7 @@ export function ResourceView({ resourceKey, me, openId }: { resourceKey: string;
       <div class="toolbar">
         {res.search.length > 0 && <input class="input" placeholder={`Search ${res.title.toLowerCase()}`} value={q} onInput={(e) => { setQ((e.target as HTMLInputElement).value); setPage(1); }} />}
         {filterField && (
-          filterField.options ? <select class="select" value={filter} onChange={(e) => { setFilter((e.target as HTMLSelectElement).value); setPage(1); }}><option value="">All {filterField.label.toLowerCase()}</option>{filterField.options.map((o) => <option value={optionValue(o)}>{optionLabel(o)}</option>)}</select>
+          filterField.options ? <select class="select" value={filter} onChange={(e) => { setFilter((e.target as HTMLSelectElement).value); setPage(1); }}><option value="">Any {filterField.label.toLowerCase()}</option>{filterField.options.map((o) => <option value={optionValue(o)}>{optionLabel(o)}</option>)}</select>
             : <input class="input" placeholder={`Filter by ${filterField.label.toLowerCase()}`} value={filter} onInput={(e) => setFilter((e.target as HTMLInputElement).value)} />
         )}
       </div>

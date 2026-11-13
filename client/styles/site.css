@@ -9,6 +9,8 @@ body { min-height: 100dvh; display: flex; flex-direction: column; }
 main { flex: 1; }
 .wrap { width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 20px; }
 .wrap-narrow { max-width: 760px; }
+/* Narrow column whose left edge lines up with the wide .wrap content edge */
+.wrap-start { margin-left: max(0px, calc((100% - 1180px) / 2)); }
 @media (max-width: 520px) { .wrap { padding: 0 16px; } }
 
 /* Engineering grid backdrop */
@@ -201,7 +203,7 @@ h1.display + .lead, h2.display + .lead, h2.display + p, h2.display + .muted { ma
   background: radial-gradient(ellipse 55% 50% at 62% 100%, rgba(225, 29, 72, 0.24), transparent 72%), radial-gradient(ellipse 40% 40% at 85% 20%, rgba(225, 29, 72, 0.1), transparent 70%);
 }
 .hero-grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: clamp(28px, 5vw, 64px); align-items: center; }
-@media (max-width: 920px) { .hero-grid { grid-template-columns: 1fr; } }
+@media (max-width: 920px) { .hero-grid { grid-template-columns: minmax(0, 1fr); } }
 .hero h1 .line-accent { display: block; color: var(--accent-hi); text-shadow: 0 0 40px rgba(225, 29, 72, 0.35); }
 .hero .lead { margin: 22px 0 30px; }
 .hero-ctas { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -253,7 +255,7 @@ h1.display + .lead, h2.display + .lead, h2.display + p, h2.display + .muted { ma
 
 /* ───────── Interactive vehicle stage (#64, #69) ───────── */
 .stage { display: grid; grid-template-columns: 1.25fr 0.75fr; gap: 24px; align-items: stretch; }
-@media (max-width: 900px) { .stage { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } }
 .stage-canvas { display: flex; flex-direction: column; justify-content: center; position: relative; border-radius: var(--radius-xl); border: 1px solid var(--line-2); background: radial-gradient(ellipse at 50% 85%, rgba(225, 29, 72, 0.12), transparent 60%), var(--surface); overflow: hidden; padding: 18px; }
 .stage-canvas::before { content: ''; position: absolute; inset: 0; background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px); background-size: 24px 24px; pointer-events: none; }
 .stage-toolbar { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
@@ -425,7 +427,8 @@ h1.display + .lead, h2.display + .lead, h2.display + p, h2.display + .muted { ma
 
 /* Mobile action bar */
 .mobile-bar { position: fixed; z-index: 70; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: var(--glass); backdrop-filter: blur(20px) saturate(1.5); -webkit-backdrop-filter: blur(20px) saturate(1.5); border-top: 1px solid var(--line-2); }
-.mobile-bar .btn { min-height: 48px; padding: 0 10px; font-size: 0.88rem; }
+.mobile-bar .btn { min-height: 48px; padding: 0 10px; font-size: 0.88rem; gap: 6px; min-width: 0; }
+@media (max-width: 380px) { .mobile-bar { gap: 6px; padding-left: 8px; padding-right: 8px; } .mobile-bar .btn { padding: 0 6px; font-size: 0.82rem; } .mobile-bar .btn svg { width: 18px; height: 18px; } }
 @media (min-width: 900px) { .mobile-bar { display: none; } }
 body.has-mobile-bar { padding-bottom: 78px; }
 @media (min-width: 900px) { body.has-mobile-bar { padding-bottom: 0; } }
@@ -477,7 +480,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
 .footer { margin-top: auto; border-top: 1px solid var(--line); background: var(--bg-2); padding: 56px 0 28px; font-size: 0.92rem; }
 .footer-grid { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 32px; }
 @media (max-width: 860px) { .footer-grid { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 520px) { .footer-grid { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .footer-grid { grid-template-columns: minmax(0, 1fr); } }
 .footer h4 { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--faint); margin-bottom: 14px; font-weight: 600; }
 .footer ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 9px; }
 .footer a { color: var(--text-2); text-decoration: none; }
@@ -501,8 +504,8 @@ table.table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
 @keyframes sos { 50% { box-shadow: 0 0 0 16px rgba(255, 223, 26, 0); } }
 
 /* ───────── Booking wizard ───────── */
-.wizard { display: grid; grid-template-columns: 1fr 360px; gap: 28px; align-items: start; }
-@media (max-width: 980px) { .wizard { grid-template-columns: 1fr; } }
+.wizard { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 28px; align-items: start; }
+@media (max-width: 980px) { .wizard { grid-template-columns: minmax(0, 1fr); } }
 .progress { display: flex; gap: 6px; margin-bottom: 26px; }
 .progress span { flex: 1; height: 4px; border-radius: 4px; background: var(--surface-3); overflow: hidden; position: relative; }
 .progress span.done::after, .progress span.current::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, var(--accent), var(--accent-hi)); transform-origin: left; animation: grow 400ms var(--ease) both; }
@@ -588,8 +591,8 @@ table.table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
 .ref { font-family: var(--font-mono); font-size: 1.4rem; letter-spacing: 0.06em; padding: 8px 16px; border-radius: 12px; background: var(--surface-2); border: 1px dashed var(--line-3); display: inline-block; }
 
 /* ───────── Tracker ───────── */
-.track-layout { display: grid; grid-template-columns: 1.3fr 0.7fr; gap: 22px; align-items: start; }
-@media (max-width: 960px) { .track-layout { grid-template-columns: 1fr; } }
+.track-layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.7fr); gap: 22px; align-items: start; }
+@media (max-width: 960px) { .track-layout { grid-template-columns: minmax(0, 1fr); } }
 .track-map { height: 460px; }
 @media (max-width: 600px) { .track-map { height: 340px; } }
 .eta { display: flex; align-items: center; gap: 18px; }

@@ -395,7 +395,7 @@ pageRoutes.get('/fault-codes', async (c) => {
   const bc = crumbs(shell, [['/fault-codes', 'Fault codes']]);
   return c.html(renderPage(c, shell, {
     title: 'OBD Fault Code Library', description: 'Look up OBD-II fault codes: meaning, probable causes and how a technician pinpoints them. DPF, AdBlue, CAN-bus, fuel and more.', path: '/fault-codes', jsonLd: [bc.ld],
-    body: html`<section class="page-head grid-bg"><div class="wrap wrap-narrow" style="margin-left:max(20px, calc((100% - 1180px)/2 + 20px))">${bc.html}<span class="eyebrow">Fault code library</span><h1 class="display">Decode your warning light</h1><p class="lead">${codes.length} common OBD-II codes with plain-English causes and the diagnostic route we would take.</p>
+    body: html`<section class="page-head grid-bg"><div class="wrap wrap-narrow wrap-start">${bc.html}<span class="eyebrow">Fault code library</span><h1 class="display">Decode your warning light</h1><p class="lead">${codes.length} common OBD-II codes with plain-English causes and the diagnostic route we would take.</p>
   <form class="dtc-search" data-dtc-search action="/fault-codes">${icon('search')}<input class="input" name="q" value="${q}" placeholder="Type a code, e.g. P0299" autocomplete="off" maxlength="20" aria-label="Fault code"></form><div class="dtc-results" data-dtc-results></div></div></section>
 <section class="section-tight"><div class="wrap">${systems.map((sys) => html`<h3 style="margin:26px 0 12px">${sys}</h3><div class="dtc-results">${codes.filter((d) => d.system === sys).map((d) => html`<a class="dtc sev-${d.severity}" href="/fault-codes/${d.code}"><span class="dtc-code">${d.code}</span><span>${d.title}</span>${icon('arrow')}</a>`)}</div>`)}</div></section>
 <section class="section-tight"><div class="wrap"><div class="alert alert-info">${icon('info')}<span>A code tells you which circuit reported a problem — not which part failed. Generic definitions shown; manufacturers can add their own meanings. Book a pinpoint diagnosis to find the real cause.</span></div></div></section>${ctaBand(shell, 'Code still a mystery?', 'We read every module, graph the live data and find the root cause — with a written report.')}`,
@@ -488,7 +488,7 @@ pageRoutes.get('/faq', async (c) => {
   return c.html(renderPage(c, shell, {
     title: 'Frequently Asked Questions', description: 'Mobile visit requirements, coding safety, payments, coverage and booking questions answered.', path: '/faq', jsonLd: [bc.ld, all_.ld],
     body: html`<section class="page-head grid-bg"><div class="wrap">${bc.html}<span class="eyebrow">FAQ</span><h1 class="display">Questions, answered</h1></div></section>
-<section class="section-tight"><div class="wrap wrap-narrow" style="margin-left:max(20px, calc((100% - 1180px)/2 + 20px))">${cats.map((cat) => html`<h2 class="display" style="font-size:1.7rem;margin:28px 0 14px">${cat}</h2>${faqBlock(faqs.filter((f) => f.category === cat)).html}`)}</div></section>${ctaBand(shell, 'Still wondering?', 'Ask in the live chat or call — a technician will answer.')}`,
+<section class="section-tight"><div class="wrap wrap-narrow wrap-start">${cats.map((cat) => html`<h2 class="display" style="font-size:1.7rem;margin:28px 0 14px">${cat}</h2>${faqBlock(faqs.filter((f) => f.category === cat)).html}`)}</div></section>${ctaBand(shell, 'Still wondering?', 'Ask in the live chat or call — a technician will answer.')}`,
   }));
 });
 
@@ -511,8 +511,8 @@ pageRoutes.get('/guides/:slug', async (c) => {
   return c.html(renderPage(c, shell, {
     title: g!.title, description: g!.excerpt.slice(0, 158), path: `/guides/${g!.slug}`,
     jsonLd: [bc.ld, { '@context': 'https://schema.org', '@type': 'Article', headline: g!.title, description: g!.excerpt, datePublished: g!.published_on, author: { '@type': 'Organization', name: shell.settings.business.name }, publisher: { '@id': `${shell.origin}/#business` } }],
-    body: html`<section class="page-head grid-bg"><div class="wrap wrap-narrow" style="margin-left:max(20px, calc((100% - 1180px)/2 + 20px))">${bc.html}<span class="row"><span class="badge badge-accent">${g!.season === 'all' ? g!.category : g!.season}</span><span class="meta">${g!.read_minutes} min read · ${formatDate(g!.published_on)}</span></span><h1 class="display" style="font-size:clamp(2.2rem,5vw,3.6rem);margin-top:16px">${g!.title}</h1><p class="lead">${g!.excerpt}</p></div></section>
-<section class="section-tight"><div class="wrap wrap-narrow prose" style="margin-left:max(20px, calc((100% - 1180px)/2 + 20px))">${markdown(g!.body)}</div></section>${ctaBand(shell)}`,
+    body: html`<section class="page-head grid-bg"><div class="wrap wrap-narrow wrap-start">${bc.html}<span class="row"><span class="badge badge-accent">${g!.season === 'all' ? g!.category : g!.season}</span><span class="meta">${g!.read_minutes} min read · ${formatDate(g!.published_on)}</span></span><h1 class="display" style="font-size:clamp(2.2rem,5vw,3.6rem);margin-top:16px">${g!.title}</h1><p class="lead">${g!.excerpt}</p></div></section>
+<section class="section-tight"><div class="wrap wrap-narrow wrap-start prose">${markdown(g!.body)}</div></section>${ctaBand(shell)}`,
   }));
 });
 
@@ -605,7 +605,7 @@ pageRoutes.get('/recovery-partners', async (c) => {
 
 // ───────────────────────────── Legal ─────────────────────────────
 function legalPage(title: string, intro: string, sections: [string, string][]): SafeHtml {
-  return html`<section class="page-head grid-bg"><div class="wrap"><span class="eyebrow">Legal</span><h1 class="display">${title}</h1><p class="lead">${intro}</p></div></section><section class="section-tight"><div class="wrap wrap-narrow prose" style="margin-left:max(20px, calc((100% - 1180px)/2 + 20px))">${sections.map(([h, body]) => html`<h2>${h}</h2>${markdown(body)}`)}</div></section>`;
+  return html`<section class="page-head grid-bg"><div class="wrap"><span class="eyebrow">Legal</span><h1 class="display">${title}</h1><p class="lead">${intro}</p></div></section><section class="section-tight"><div class="wrap wrap-narrow wrap-start prose">${sections.map(([h, body]) => html`<h2>${h}</h2>${markdown(body)}`)}</div></section>`;
 }
 
 pageRoutes.get('/privacy', async (c) => {
@@ -707,7 +707,7 @@ pageRoutes.get('/:slug{[a-z0-9-]{2,60}}', async (c) => {
 <section class="section-tight"><div class="wrap grid grid-2" style="align-items:start"><div class="prose">${markdown(town.body)}</div><div class="stack">${postcodeChecker(cur)}${coverageMap(loc, town.lat != null ? { lat: town.lat, lng: town.lng, label: town.name } : {})}</div></div></section>
 <section class="section-tight"><div class="wrap">${sectionHead(`Popular in ${town.name}`, 'Services', '', html`<a class="btn" href="/services">All services ${icon('arrow')}</a>`)}<div class="grid grid-3">${featured.map((p) => pkgCard(p, cur))}</div></div></section>
 ${reviews.length ? html`<section class="section-tight"><div class="wrap"><div class="grid grid-3">${reviews.map(reviewCard)}</div></div></section>` : ''}
-<section class="section-tight"><div class="wrap wrap-narrow" style="margin-left:max(20px, calc((100% - 1180px)/2 + 20px))">${faq.html}</div></section>${ctaBand(shell, `Booking in ${town.name}?`)}`,
+<section class="section-tight"><div class="wrap wrap-narrow wrap-start">${faq.html}</div></section>${ctaBand(shell, `Booking in ${town.name}?`)}`,
   }));
 });
 

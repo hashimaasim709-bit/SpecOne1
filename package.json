@@ -17,7 +17,8 @@
     "vendor": "node scripts/vendor.mjs",
     "export:source": "node scripts/export-source.mjs",
     "backup:decrypt": "node scripts/decrypt-backup.mjs",
-    "twa": "bash scripts/twa/build-twa.sh"
+    "twa": "bash scripts/twa/build-twa.sh",
+    "import:legacy": "node scripts/import-legacy.mjs"
   },
   "engines": {
     "node": ">=20"
