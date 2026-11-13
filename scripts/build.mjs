@@ -65,8 +65,9 @@ async function buildMigrations() {
 }
 
 async function main() {
-  await rm(outdir, { recursive: true, force: true });
+  // Empty the output folder in place (keeping the directory itself) so file watchers stay attached.
   await mkdir(outdir, { recursive: true });
+  for (const f of await readdir(outdir)) await rm(path.join(outdir, f), { recursive: true, force: true });
   await mkdir(generated, { recursive: true });
 
   const result = await build({
@@ -82,10 +83,12 @@ async function main() {
     },
     outdir,
     entryNames: '[name]-[hash]',
+    chunkNames: 'chunk-[hash]',
     assetNames: '[name]-[hash]',
+    splitting: true,
     bundle: true,
     format: 'esm',
-    target: ['es2020', 'safari14'],
+    target: ['es2020', 'safari15', 'chrome90', 'firefox90'],
     minify: !dev,
     sourcemap: dev ? 'inline' : false,
     metafile: true,

@@ -31,7 +31,7 @@ export function html(strings: TemplateStringsArray, ...values: Value[]): SafeHtm
 export const raw = (s: string): SafeHtml => new SafeHtml(s);
 
 /** JSON for embedding inside <script type="application/json"> or JSON-LD — escapes `<` so it can never close the tag. */
-export const jsonForScript = (data: unknown): SafeHtml => new SafeHtml(JSON.stringify(data).replace(/</g, '\\u003c').replace(/ /g, '\\u2028').replace(/ /g, '\\u2029'));
+export const jsonForScript = (data: unknown): SafeHtml => new SafeHtml(JSON.stringify(data).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029'));
 
 /**
  * Minimal, safe Markdown for admin-written copy: paragraphs, ## / ### headings, - bullets,
