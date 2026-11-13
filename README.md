@@ -22,7 +22,7 @@ npm install
 cp .dev.vars.example .dev.vars
 npm run dev            # http://localhost:8787   (admin at /admin)
 npm run check          # typecheck + unit tests
-npm run deploy         # check, migrate and deploy to Cloudflare
+npm run deploy         # check and deploy to Cloudflare (creates the database on first run)
 ```
 
 ## Stack

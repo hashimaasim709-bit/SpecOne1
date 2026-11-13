@@ -1,78 +1,53 @@
 # Deploying SpecOne Auto Labs
 
-The platform runs on **Cloudflare Workers** with a **D1** (SQLite) database and an **R2**
-bucket for photos, videos and backups. The free Cloudflare plan is enough to start.
+The platform runs on **Cloudflare Workers** with a **D1** (SQLite) database. The free Cloudflare
+plan is enough. Allow about 20 minutes the first time; after that every merge to `main` goes live
+by itself.
 
-Allow about 20 minutes for the first deploy. Every step after that is a `git push`.
+You only need a web browser. Nothing has to be installed on your computer.
 
 ---
 
-## 1. One-time setup on your computer
+## Part A — Go live (browser only)
 
-```bash
-# Node.js 20 or newer, then:
-npm install
-npx wrangler login          # opens Cloudflare in your browser
-```
+### 1. Create a Cloudflare account
+Sign up free at **dash.cloudflare.com**. Then open **Workers & Pages** in the left menu (it may sit
+under *Compute*). If Cloudflare asks you to choose a `workers.dev` name, pick one, e.g. `specone`.
+Your site will first live at `https://specone-auto-labs.<that-name>.workers.dev`.
 
-## 2. Create the database and storage
+### 2. Make a Cloudflare API token (lets GitHub publish the site)
+1. Go to **dash.cloudflare.com/profile/api-tokens** → **Create Token**.
+2. Next to **Edit Cloudflare Workers** click **Use template**.
+3. Under *Permissions* click **+ Add more** and choose **Account → D1 → Edit**.
+4. *Account Resources*: **Include → your account**. *Zone Resources*: **Include → All zones**.
+5. **Continue to summary** → **Create Token** → **Copy** the token. It is shown only once.
 
-Use a **new** database. The old site's database has a different shape and must not be reused
-(you can import its bookings in step 7).
+### 3. Copy your Account ID
+In the Cloudflare dashboard, the address bar looks like `dash.cloudflare.com/`**`1a2b3c…`**`/…`.
+That 32-character code is your Account ID. (It is also shown on the Workers & Pages overview.)
 
-```bash
-npx wrangler d1 create specone
-npx wrangler r2 bucket create specone-media
-```
+### 4. Give both to GitHub
+GitHub repository → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**:
 
-`d1 create` prints a `database_id`. Open `wrangler.jsonc` and add it to the D1 entry:
+| Name | Value |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | the token from step 2 |
+| `CLOUDFLARE_ACCOUNT_ID` | the Account ID from step 3 |
 
-```jsonc
-"d1_databases": [
-  { "binding": "DB", "database_name": "specone", "database_id": "PASTE-ID-HERE", "migrations_dir": "migrations" }
-],
-```
+### 5. Publish
+Merge the pull request (**Merge pull request** → **Confirm merge**). Open the **Actions** tab and wait
+for the **Deploy** run to show a green tick (about 3 minutes). The first deploy creates the database
+automatically, and the site fills in its full catalogue on the first visit.
 
-## 3. Secrets
+### 6. Set your setup password
+Cloudflare → **Workers & Pages** → **specone-auto-labs** → **Settings** → **Variables and Secrets** →
+**+ Add** → type **Secret**, name `SETUP_TOKEN`, value: any long phrase you invent → **Deploy**.
+It is used once, to prove you own the site.
 
-Secrets are stored encrypted by Cloudflare and never appear in the code or the database.
-Only `SETUP_TOKEN` is required; everything else switches on an optional integration.
-
-```bash
-npx wrangler secret put SETUP_TOKEN            # any long random phrase — used once to create your owner account
-npx wrangler secret put BACKUP_ENCRYPTION_KEY  # recommended — encrypts nightly backups (keep a copy somewhere safe)
-```
-
-| Secret(s) | Turns on | Where to get it |
-|---|---|---|
-| `RESEND_API_KEY`, `EMAIL_FROM` | Booking confirmations, reminders, sign-in codes, invoices by email | resend.com → verify your domain → API key. `EMAIL_FROM` e.g. `SpecOne Auto Labs <bookings@speconeautolabs.co.uk>` |
-| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | SMS confirmations with tracker links, review requests, staff dispatch texts | twilio.com → buy a UK number (or alphanumeric sender) |
-| `TWILIO_WHATSAPP_FROM` | WhatsApp Business messages | Twilio WhatsApp sender (after Meta approval) |
-| `NTFY_TOPIC` (optional `NTFY_SERVER`) | Instant phone alerts for new bookings, chats, payments, low stock | Install the ntfy app, subscribe to a long random topic name |
-| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Same alerts via Telegram | @BotFather |
-| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Online deposits and balances with card, **Apple Pay and Google Pay** | Stripe dashboard → Developers. Webhook endpoint: `https://YOUR-DOMAIN/api/stripe/webhook`, events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded` |
-| `DVLA_API_KEY` | Registration auto-fill (make, year, colour, fuel, MOT expiry) | DVLA Vehicle Enquiry Service API |
-| `GETADDRESS_API_KEY` **or** `IDEAL_POSTCODES_API_KEY` | Street-address dropdown after postcode entry | getaddress.io or ideal-postcodes.co.uk (postcode distance works without either) |
-| `GOOGLE_PLACES_API_KEY` | Daily sync of your Google reviews onto the site | Google Cloud → Places API (New). Also set the Place ID in Admin → Settings → Business |
-| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Invisible bot protection on booking and enquiry forms | Cloudflare dashboard → Turnstile |
-| `ANTHROPIC_API_KEY` | AI-assisted sentiment summaries of reviews and chats | console.anthropic.com (a built-in analyser is used without it) |
-| `TWA_PACKAGE_NAME`, `TWA_SHA256_FINGERPRINTS` | Full-screen Google Play app (see step 8) | Printed by `npm run twa` |
-
-Set a variable (not a secret) for your public address so links in texts and emails are right:
-add `"PUBLIC_ORIGIN": "https://speconeautolabs.co.uk"` to `vars` in `wrangler.jsonc`.
-
-## 4. Deploy
-
-```bash
-npm run deploy      # typecheck + tests + database migrations + upload
-```
-
-Wrangler prints a `*.workers.dev` address. Open it — the site is live with the full catalogue.
-
-## 5. Create your owner account
-
-Go to `/admin`, enter the `SETUP_TOKEN` you chose, your name, email and a password.
-Then in **Settings → Security** tap **Add this device** to sign in with Face ID or fingerprint.
+### 7. Create your owner account
+Open `https://specone-auto-labs.<your-name>.workers.dev/admin`. Enter the `SETUP_TOKEN` phrase,
+your name, email and a password (10+ characters). Then in **Settings → Security** tap
+**Add this device** to sign in with Face ID or fingerprint.
 
 Next, in the admin:
 - **Settings → Business**: phone, WhatsApp, email, opening windows, Google review link, social links.
@@ -82,28 +57,65 @@ Next, in the admin:
 - **Team**: add partner technicians with the Technician role.
 - **Settings → Booking rules → Phone calendar sync**: subscribe on your phone.
 
-## 6. Your domain, SSL and security
+---
 
-1. Add `speconeautolabs.co.uk` to Cloudflare (Websites → Add a site) and switch the nameservers at your registrar.
-2. In `wrangler.jsonc` uncomment the `routes` entry and deploy again. Cloudflare issues and renews the SSL certificate automatically.
+## Part B — Optional extras (any time later)
+
+### Integrations
+Each one is added the same way as `SETUP_TOKEN` in step 6 (Worker → Settings → Variables and
+Secrets → Add → Secret). Until a key is added the site uses a sensible fallback and says so.
+
+| Secret(s) | Turns on | Where to get it |
+|---|---|---|
+| `NTFY_TOPIC` | Instant phone alerts for new bookings, chats, payments, low stock | Install the free **ntfy** app and subscribe to a long random name nobody could guess |
+| `RESEND_API_KEY`, `EMAIL_FROM` | Booking confirmations, reminders, sign-in codes, invoices by email | resend.com → verify your domain → API key. `EMAIL_FROM` e.g. `SpecOne Auto Labs <bookings@speconeautolabs.co.uk>` |
+| `DVLA_API_KEY` | Real make, colour, fuel and MOT date from the registration | Apply free for the DVLA Vehicle Enquiry Service API |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | Automatic SMS with tracker links, review requests, staff dispatch texts | twilio.com → buy a UK number (or alphanumeric sender) |
+| `TWILIO_WHATSAPP_FROM` | Automatic WhatsApp Business messages | Twilio WhatsApp sender (after Meta approval) |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Owner alerts via Telegram instead of / as well as ntfy | @BotFather |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Online deposits and balances with card, **Apple Pay and Google Pay** | Stripe dashboard → Developers. Webhook endpoint: `https://YOUR-DOMAIN/api/stripe/webhook`, events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded` |
+| `GETADDRESS_API_KEY` **or** `IDEAL_POSTCODES_API_KEY` | Street-address dropdown after postcode entry | getaddress.io or ideal-postcodes.co.uk (postcode distance works without either) |
+| `GOOGLE_PLACES_API_KEY` | Daily sync of your Google reviews onto the site | Google Cloud → Places API (New). Also set the Place ID in Admin → Settings → Business |
+| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Invisible bot protection on booking and enquiry forms | Cloudflare dashboard → Turnstile |
+| `ANTHROPIC_API_KEY` | AI-assisted sentiment summaries of reviews and chats | console.anthropic.com (a built-in analyser is used without it) |
+| `BACKUP_ENCRYPTION_KEY` | Nightly encrypted backups (needs R2, below) | Any long phrase — keep a copy somewhere safe |
+| `TWA_PACKAGE_NAME`, `TWA_SHA256_FINGERPRINTS` | Full-screen Google Play app | Printed by `npm run twa` |
+
+**Admin → Settings → System** shows which integrations are switched on.
+
+### R2 storage (videos and cloud backups)
+Photos work out of the box (stored in the database). For video uploads, larger photos and nightly
+encrypted backups: Cloudflare dashboard → **R2** → enable it (Cloudflare asks for a card; the free
+allowance still applies). Then uncomment the `r2_buckets` block in `wrangler.jsonc` and merge.
+The bucket is created automatically on the next deploy.
+
+### Your own domain, SSL and security
+1. Add `speconeautolabs.co.uk` to Cloudflare (**Add a site**) and switch the nameservers at your registrar.
+2. In `wrangler.jsonc` uncomment the `routes` entry, and add `"PUBLIC_ORIGIN": "https://speconeautolabs.co.uk"`
+   to `vars` so links in texts and emails use your domain. Merge. Cloudflare issues the SSL certificate automatically.
 3. Recommended zone settings: **SSL/TLS → Full (strict)**, **Always Use HTTPS**, **HSTS** (the app also sends it), **Bot Fight Mode** on.
-4. **Rate limiting (WAF)** — the app already limits bookings, logins, chat and uploads per visitor. For an extra edge layer add a rule in Security → WAF → Rate limiting rules, e.g. *URI path starts with `/api/`* → 120 requests per minute per IP → Block.
+4. **Rate limiting (WAF)** — the app already limits bookings, logins, chat and uploads per visitor. For an
+   extra edge layer add a rule in Security → WAF → Rate limiting rules, e.g. *URI path starts with `/api/`*
+   → 120 requests per minute per IP → Block.
+5. Optional: add a repository **variable** `PUBLIC_URL` (Settings → Secrets and variables → Actions →
+   Variables) so every deploy is followed by an automatic health check.
 
-## 7. Bring over your old bookings (optional)
-
-While signed in on the **old** site, open `/api/admin/cloud-backup` and save the JSON file. Then:
+### Bring over your old bookings
+While signed in on the **old** site, open `/api/admin/cloud-backup` and save the JSON file. Then, on a
+computer with Node.js 20+ and this repository:
 
 ```bash
+npm install
 npm run import:legacy -- specone-cloud-d1-backup.json legacy-import.sql
+npx wrangler login
 npx wrangler d1 execute DB --remote --file legacy-import.sql
 ```
 
 Customers, vehicles and bookings are recreated. It is safe to run twice.
 
-## 8. Google Play app (optional)
-
+### Google Play app
 The site is already an installable app (Add to Home Screen, Android long-press shortcuts, offline
-page). To list it on Google Play as well:
+page). To list it on Google Play as well, on a computer:
 
 ```bash
 SITE=https://speconeautolabs.co.uk npm run twa
@@ -111,27 +123,31 @@ SITE=https://speconeautolabs.co.uk npm run twa
 
 Bubblewrap asks a few questions and builds `scripts/twa/out/app-release-bundle.aab`. Set the printed
 package name and SHA-256 fingerprint as the `TWA_PACKAGE_NAME` and `TWA_SHA256_FINGERPRINTS`
-secrets, deploy, then upload the `.aab` in the Play Console. Keep the generated signing key safe.
+secrets, then upload the `.aab` in the Play Console. Keep the generated signing key safe.
 
-## 9. Automatic deploys from GitHub
+---
 
-`.github/workflows/deploy.yml` deploys every push to `main` after typechecking, testing and
-migrating. In the GitHub repository → Settings → Secrets and variables → Actions add:
+## Updates, rollback and backups
 
-- `CLOUDFLARE_API_TOKEN` — Cloudflare → My Profile → API Tokens → *Edit Cloudflare Workers* template, plus D1 Edit
-- `CLOUDFLARE_ACCOUNT_ID`
-- Variable `PUBLIC_URL` (optional) — enables the post-deploy health check
-
-Cloudflare swaps versions atomically, so there is no downtime. To roll back:
-`npx wrangler rollback`.
-
-## 10. Backups and recovery
-
-- **Nightly** at 03:15 UTC an encrypted snapshot of every table goes to R2 (`backups/`), 30 kept. Download from Admin → Settings → Backups & data and decrypt locally with
-  `BACKUP_ENCRYPTION_KEY=... npm run backup:decrypt -- file.json.gz.enc`.
-- **Point in time**: D1 Time Travel restores the database to any minute in the last 30 days:
+- **Updates**: every merge to `main` is typechecked, tested and deployed. Cloudflare swaps versions
+  atomically, so there is no downtime.
+- **Rollback**: Cloudflare → Workers & Pages → specone-auto-labs → **Deployments** → pick an earlier
+  version → **Rollback**. (Or `npx wrangler rollback`.)
+- **Point-in-time restore**: D1 Time Travel restores the database to any minute in the last 30 days:
   `npx wrangler d1 time-travel restore specone --timestamp=2026-11-13T10:00:00Z`.
+- **Nightly backups** (with R2 + `BACKUP_ENCRYPTION_KEY`): encrypted snapshots in R2 `backups/`, 30 kept.
+  Download from Admin → Settings → Backups & data; decrypt with
+  `BACKUP_ENCRYPTION_KEY=... npm run backup:decrypt -- file.json.gz.enc`.
 - **Everything you own**: `npm run export:source` zips the full source; Admin → Backups downloads all data as JSON.
+
+## Deploying from your own computer instead
+
+```bash
+npm install
+npx wrangler login
+npx wrangler secret put SETUP_TOKEN
+npm run deploy           # typecheck + tests + deploy (creates the database on first run)
+```
 
 ## Local development
 

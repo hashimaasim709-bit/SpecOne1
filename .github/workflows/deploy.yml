@@ -27,8 +27,8 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
-      - name: Apply database migrations
-        run: npx wrangler d1 migrations apply DB --remote
+      # The first deploy creates the D1 database automatically; the Worker applies
+      # its own migrations on start-up, so there is no separate migration step.
       - name: Deploy Worker
         run: npx wrangler deploy
       - name: Smoke test
