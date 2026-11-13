@@ -55,6 +55,7 @@ export interface CreatedBooking {
   depositRequired: boolean;
   status: BookingStatus;
   customerId: number;
+  customerCreated: boolean;
   referralCode: string;
   quote: Quote;
 }
@@ -145,13 +146,25 @@ export async function upsertCustomer(
     (email ? await first<{ id: number; referral_code: string | null }>(db, "SELECT id, referral_code FROM customers WHERE email = ? AND email <> '' ORDER BY id LIMIT 1", email) : null) ??
     (phone ? await first<{ id: number; referral_code: string | null }>(db, "SELECT id, referral_code FROM customers WHERE phone = ? AND phone <> '' ORDER BY id LIMIT 1", phone) : null);
   if (existing) {
-    await run(
-      db,
-      `UPDATE customers SET name = ?, email = CASE WHEN email = '' THEN ? ELSE email END, phone = CASE WHEN ? <> '' THEN ? ELSE phone END,
-       address = CASE WHEN ? <> '' THEN ? ELSE address END, postcode = CASE WHEN ? <> '' THEN ? ELSE postcode END,
-       marketing_opt_in = MAX(marketing_opt_in, ?) WHERE id = ?`,
-      c.name.trim(), email, phone, phone, c.address ?? '', c.address ?? '', c.postcode ?? '', c.postcode ?? '', c.marketing ? 1 : 0, existing.id,
-    );
+    if (forceId) {
+      // Verified account holder: their details are authoritative.
+      await run(
+        db,
+        `UPDATE customers SET name = ?, email = CASE WHEN ? <> '' THEN ? ELSE email END, phone = CASE WHEN ? <> '' THEN ? ELSE phone END,
+         address = CASE WHEN ? <> '' THEN ? ELSE address END, postcode = CASE WHEN ? <> '' THEN ? ELSE postcode END,
+         marketing_opt_in = MAX(marketing_opt_in, ?) WHERE id = ?`,
+        c.name.trim(), email, email, phone, phone, c.address ?? '', c.address ?? '', c.postcode ?? '', c.postcode ?? '', c.marketing ? 1 : 0, existing.id,
+      );
+    } else {
+      // Unverified match on email/phone: never overwrite what is on file — only fill blanks.
+      await run(
+        db,
+        `UPDATE customers SET email = CASE WHEN email = '' THEN ? ELSE email END, phone = CASE WHEN phone = '' THEN ? ELSE phone END,
+         address = CASE WHEN address = '' THEN ? ELSE address END, postcode = CASE WHEN postcode = '' THEN ? ELSE postcode END,
+         marketing_opt_in = MAX(marketing_opt_in, ?) WHERE id = ?`,
+        email, phone, c.address ?? '', c.postcode ?? '', c.marketing ? 1 : 0, existing.id,
+      );
+    }
     let code = existing.referral_code;
     if (!code) code = await createReferralCode(db, existing.id, c.name);
     return { id: existing.id, referralCode: code, created: false };
@@ -323,8 +336,24 @@ export async function createBooking(env: Env, settings: Settings, input: NewBook
     mobile ? address : `Drop-off at ${loc.name}`, normPostcode(input.postcode), geo?.lat ?? null, geo?.lng ?? null, geo?.miles ?? 0,
     loc.currency, quote.subtotal + customSubtotal, discount, quote.travelFee, quote.emergencyFee, quote.peakAdjustment, quote.loyaltyDiscount, total,
     JSON.stringify({ ...quote, lines: undefined }), depositDue, input.paymentMethod || 'on_completion', promoCode, referralCode,
-    partnerId, fleetSlug, input.subscriptionId ?? null, input.assignedUserId ?? null, notes, (input.internalNotes ?? '').slice(0, 4000),
+    partnerId, fleetSlug, input.subscriptionId ?? null, input.assignedUserId ?? null, notes,
+    // An unverified booking matched to an existing record keeps the record intact; note who actually booked.
+    [!customer.created && !input.sessionCustomerId ? `Booked as: ${name} · ${normPhone(input.customer.phone)} · ${input.customer.email.trim().toLowerCase()}` : '', input.internalNotes ?? '']
+      .filter(Boolean).join('\n').slice(0, 4000),
   );
+
+  // Two people racing for the last slot: the later insert backs out — before any side effects run.
+  if (slot !== 'asap' && !input.overrideAvailability) {
+    const capacity = capacityOf(loc);
+    const same = await all<{ id: number; slot: string; slot_span: number }>(db, "SELECT id, slot, slot_span FROM bookings WHERE location_id = ? AND date = ? AND slot <> 'asap' AND status NOT IN ('cancelled','no_show')", loc.id, input.date);
+    for (const s of slotsCovered(slot as SlotKey, span) ?? []) {
+      const holders = same.filter((b) => (slotsCovered(b.slot as SlotKey, b.slot_span) ?? [b.slot]).includes(s));
+      if (holders.length > capacity[s] && Math.max(...holders.map((h) => h.id)) === id) {
+        await run(db, 'DELETE FROM bookings WHERE id = ?', id);
+        bad('Sorry — someone just took that window. Please pick another.', { slot: 'Just taken.' });
+      }
+    }
+  }
 
   try {
     const batch: D1PreparedStatement[] = [];
@@ -349,19 +378,6 @@ export async function createBooking(env: Env, settings: Settings, input: NewBook
     throw err;
   }
 
-  // Two people racing for the last slot: the later insert backs out.
-  if (slot !== 'asap' && !input.overrideAvailability) {
-    const capacity = capacityOf(loc);
-    const same = await all<{ id: number; slot: string; slot_span: number }>(db, "SELECT id, slot, slot_span FROM bookings WHERE location_id = ? AND date = ? AND slot <> 'asap' AND status NOT IN ('cancelled','no_show')", loc.id, input.date);
-    for (const s of slotsCovered(slot as SlotKey, span) ?? []) {
-      const holders = same.filter((b) => (slotsCovered(b.slot as SlotKey, b.slot_span) ?? [b.slot]).includes(s));
-      if (holders.length > capacity[s] && Math.max(...holders.map((h) => h.id)) === id) {
-        await run(db, 'DELETE FROM bookings WHERE id = ?', id);
-        bad('Sorry — someone just took that window. Please pick another.', { slot: 'Just taken.' });
-      }
-    }
-  }
-
   // Maintenance plans: booking a plan package starts the subscription for that vehicle.
   if (input.source !== 'subscription') {
     for (const line of quote.lines) {
@@ -376,7 +392,7 @@ export async function createBooking(env: Env, settings: Settings, input: NewBook
     }
   }
 
-  const created: CreatedBooking = { id, ref, token, total, depositDue, depositRequired: quote.depositRequired, status, customerId: customer.id, referralCode: customer.referralCode, quote };
+  const created: CreatedBooking = { id, ref, token, total, depositDue, depositRequired: quote.depositRequired, status, customerId: customer.id, customerCreated: customer.created, referralCode: customer.referralCode, quote };
 
   if (!input.silent) {
     const work = (async () => {
@@ -408,11 +424,11 @@ export async function getBookingByToken(db: D1Database, token: string): Promise<
   return first<BookingRow>(db, 'SELECT * FROM bookings WHERE access_token = ?', token);
 }
 
-export interface BookingVehicle { id: number; reg: string; make: string; model: string; year: number | null; fuel: string; colour: string; size: Size; body: string; mot_due: string | null; notes: string }
+export interface BookingVehicle { id: number; reg: string; make: string; model: string; year: number | null; fuel: string; colour: string; vin: string; size: Size; body: string; mot_due: string | null; notes: string }
 export interface BookingItem { id: number; vehicle_id: number | null; package_id: number | null; kind: string; name: string; qty: number; unit_price: number; sort: number }
 
 export async function bookingVehicles(db: D1Database, bookingId: number): Promise<BookingVehicle[]> {
-  return all<BookingVehicle>(db, 'SELECT v.id, v.reg, v.make, v.model, v.year, v.fuel, v.colour, bv.size, v.body, v.mot_due, v.notes FROM booking_vehicles bv JOIN vehicles v ON v.id = bv.vehicle_id WHERE bv.booking_id = ? ORDER BY bv.id', bookingId);
+  return all<BookingVehicle>(db, 'SELECT v.id, v.reg, v.make, v.model, v.year, v.fuel, v.colour, v.vin, bv.size, v.body, v.mot_due, v.notes FROM booking_vehicles bv JOIN vehicles v ON v.id = bv.vehicle_id WHERE bv.booking_id = ? ORDER BY bv.id', bookingId);
 }
 export async function bookingItems(db: D1Database, bookingId: number): Promise<BookingItem[]> {
   return all<BookingItem>(db, 'SELECT id, vehicle_id, package_id, kind, name, qty, unit_price, sort FROM booking_items WHERE booking_id = ? ORDER BY sort, id', bookingId);

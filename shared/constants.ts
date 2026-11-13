@@ -52,6 +52,9 @@ export const ACTIVE_STATUSES: BookingStatus[] = ['pending', 'confirmed', 'en_rou
 
 export const PAYMENT_METHODS: Record<string, string> = {
   on_completion: 'Card / Apple Pay / Google Pay on completion',
+  card: 'Card / contactless',
+  sumup: 'Card (SumUp reader)',
+  other: 'Other',
   cash: 'Cash on completion',
   bank_transfer: 'Bank transfer on invoice',
   online: 'Paid online',

@@ -24,7 +24,19 @@ export async function autoReply(db: D1Database, settings: Settings, message: str
     const pick = (cat: string) => packages.filter((p) => p.category === cat).sort((a, z) => a.price_s - z.price_s);
     const diag = pick('diagnostics');
     const detail = pick('detailing');
-    const mentioned = packages.find((p) => p.name.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 4).some((w) => q.includes(` ${w}`)));
+    // Match what the customer typed against package names and slugs ("dpf regen" → DPF package).
+    const STOP = new Set(['how', 'much', 'price', 'cost', 'costs', 'quote', 'the', 'for', 'and', 'your', 'you', 'what', 'does', 'charge', 'rates', 'need', 'car', 'van', 'please', 'with', 'can']);
+    const words = q.split(/\s+/).filter((w) => w.length >= 3 && !STOP.has(w));
+    let mentioned: (typeof packages)[number] | undefined;
+    let best = 0;
+    for (const p of packages) {
+      const hay = `${p.name} ${p.slug} ${p.badge}`.toLowerCase();
+      const score = words.filter((w) => hay.includes(w)).length;
+      if (score > best) {
+        best = score;
+        mentioned = p;
+      }
+    }
     if (mentioned) return `${mentioned.name} is ${mentioned.price_s === mentioned.price_l ? money(mentioned.price_m, cur) : `${money(mentioned.price_s, cur)}–${money(mentioned.price_l, cur)} depending on vehicle size`}. Prices are fixed and you pay on completion. You can book it at /book.`;
     return `Diagnostics start from ${money(diag[0]?.price_s ?? 0, cur)} and detailing from ${money(detail[0]?.price_s ?? 0, cur)}. Combine two packages and save ${money(settings.pricing.bundle.two, cur)}, or three for ${money(settings.pricing.bundle.threePlus, cur)} off. Full price list: /services`;
   }

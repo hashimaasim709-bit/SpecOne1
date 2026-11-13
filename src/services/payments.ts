@@ -25,6 +25,7 @@ export async function recordPayment(
   );
   if (!res.changes) return false;
   await syncPaymentStatus(db, bookingId);
+  if (p.kind !== 'refund') await run(db, 'UPDATE bookings SET payment_method = ? WHERE id = ?', p.method, bookingId);
   const label = p.kind === 'refund' ? 'Refund issued' : p.kind === 'deposit' ? 'Deposit received' : 'Payment received';
   await addEvent(db, bookingId, 'payment', `${label}: ${money(p.amount, booking.currency)} (${p.method.replace(/_/g, ' ')})`, p.actor ?? '');
   if (p.kind !== 'refund') await emit(db, 'payment.received', { ...(await webhookPayload(db, bookingId)), payment: { kind: p.kind, method: p.method, provider: p.provider, amount: p.amount } });

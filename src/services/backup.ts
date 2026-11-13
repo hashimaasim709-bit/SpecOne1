@@ -52,7 +52,7 @@ export interface BackupResult {
 export async function runBackup(env: Env, trigger: 'cron' | 'manual'): Promise<BackupResult> {
   if (!env.MEDIA) return { ok: false, key: '', size: 0, encrypted: false, message: 'R2 storage is not connected, so cloud backups are unavailable. Use the manual download instead.' };
   const { data, tables, rows } = await exportDatabase(env.DB);
-  const compressed = await gzip(new TextEncoder().encode(JSON.stringify(data)));
+  const compressed = await gzip(new Uint8Array(new TextEncoder().encode(JSON.stringify(data))));
   const encrypted = !!env.BACKUP_ENCRYPTION_KEY;
   const body = encrypted ? await encryptBackup(compressed, env.BACKUP_ENCRYPTION_KEY!) : compressed;
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -90,7 +90,8 @@ export function toCsv(rows: Record<string, unknown>[], columns?: string[]): stri
   const cols = columns ?? [...new Set(rows.flatMap((r) => Object.keys(r)))];
   const cell = (v: unknown): string => {
     let s = v == null ? '' : String(v);
-    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    // Neutralise spreadsheet formulas, but leave plain numbers such as +44 phone numbers intact.
+    if (/^[=+\-@\t\r]/.test(s) && !/^[+-]?\d[\d\s().-]*$/.test(s)) s = `'${s}`;
     return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   return [cols.join(','), ...rows.map((r) => cols.map((c) => cell(r[c])).join(','))].join('\r\n');

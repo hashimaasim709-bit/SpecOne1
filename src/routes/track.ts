@@ -1,0 +1,129 @@
+// Customer-facing live tracker, reached through the secret link in the confirmation message.
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { slotLabel, STATUS_META } from '../../shared/constants';
+import { formatReg, todayIn } from '../../shared/format';
+import type { TrackPayload } from '../../shared/types';
+import type { AppEnv, Ctx } from '../env';
+import { originOf } from '../env';
+import { audit } from '../lib/auth';
+import { all, first, run } from '../lib/db';
+import { noStore, readJson } from '../lib/http';
+import { fail, rateLimit } from '../lib/security';
+import { getSettings } from '../lib/settings';
+import { bookingItems, bookingVehicles, getBookingByToken, setStatus, type BookingRow } from '../services/bookings';
+import { pushOwner } from '../services/notify';
+import { createCheckout, paymentsEnabled } from '../services/payments';
+import { analyseReview } from '../services/sentiment';
+import { emit } from '../services/webhooks';
+
+export const trackRoutes = new Hono<AppEnv>();
+
+export async function bookingFromToken(c: Ctx): Promise<BookingRow> {
+  const booking = await getBookingByToken(c.env.DB, c.req.param('token') ?? '');
+  if (!booking) fail(404, 'This tracking link is not valid.');
+  return booking!;
+}
+
+trackRoutes.get('/:token', async (c) => {
+  noStore(c);
+  await rateLimit(c, 'track', 240, 600);
+  const b = await bookingFromToken(c);
+  const db = c.env.DB;
+  const settings = await getSettings(db);
+  const [vehicles, items, events, tech, van, docs] = await Promise.all([
+    bookingVehicles(db, b.id),
+    bookingItems(db, b.id),
+    all<{ type: string; detail: string; created_at: string }>(db, 'SELECT type, detail, created_at FROM booking_events WHERE booking_id = ? AND public = 1 ORDER BY id', b.id),
+    b.assigned_user_id ? first<{ name: string }>(db, 'SELECT name FROM users WHERE id = ?', b.assigned_user_id) : null,
+    first<{ lat: number | null; lng: number | null; heading: number | null; position_at: string | null }>(db, 'SELECT lat, lng, heading, position_at FROM vans WHERE tracking_booking_id = ? ORDER BY position_at DESC LIMIT 1', b.id),
+    Promise.all([
+      all<{ id: number }>(db, 'SELECT id FROM battery_tests WHERE booking_id = ?', b.id),
+      all<{ id: number; kind: string }>(db, "SELECT id, kind FROM checklist_runs WHERE booking_id = ? AND status = 'completed' AND kind IN ('vhc','ppi')", b.id),
+    ]),
+  ]);
+  const showVan = (b.status === 'en_route' || b.status === 'arrived') && van?.lat != null && van.position_at && Date.now() - Date.parse(van.position_at) < 30 * 60_000;
+  const t = encodeURIComponent(b.access_token);
+  const documents = [{ label: b.status === 'completed' ? 'Invoice' : 'Booking summary', href: `/track/${t}/invoice.pdf` }];
+  if (b.status === 'completed' || b.findings) documents.push({ label: 'Technical report', href: `/track/${t}/report.pdf` });
+  docs[0].forEach((d) => documents.push({ label: 'Battery health certificate', href: `/track/${t}/battery/${d.id}.pdf` }));
+  docs[1].forEach((d) => documents.push({ label: d.kind === 'ppi' ? 'Pre-purchase inspection report' : 'Vehicle health check', href: `/track/${t}/checklist/${d.id}.pdf` }));
+
+  const payload: TrackPayload = {
+    ref: b.ref,
+    status: b.status,
+    statusText: STATUS_META[b.status].customer,
+    date: b.date,
+    slot: slotLabel(b.slot),
+    serviceMode: b.service_mode,
+    address: b.address,
+    destination: b.lat != null && b.lng != null ? { lat: b.lat, lng: b.lng } : null,
+    van: showVan ? { lat: van!.lat!, lng: van!.lng!, heading: van!.heading, updatedAt: van!.position_at! } : null,
+    etaMinutes: b.status === 'en_route' ? b.eta_minutes : null,
+    technician: tech?.name ?? settings.business.leadEngineer,
+    vehicles: vehicles.map((v) => ({ reg: formatReg(v.reg), label: [v.year, v.make, v.model].filter(Boolean).join(' ') })),
+    items: items.map((i) => ({ name: i.qty !== 1 ? `${i.name} × ${i.qty}` : i.name, price: Math.round(i.qty * i.unit_price) })),
+    total: b.total,
+    paid: b.paid_amount,
+    balance: Math.max(0, b.total - b.paid_amount),
+    currency: b.currency,
+    canPayOnline: paymentsEnabled(c.env) && b.total - b.paid_amount > 0 && !['cancelled', 'no_show'].includes(b.status),
+    events: events.map((e) => ({ type: e.type, detail: e.detail, at: e.created_at })),
+    documents,
+    reviewUrl: settings.business.googleReviewUrl,
+    business: { name: settings.business.name, phone: settings.business.phone, whatsapp: settings.business.whatsapp },
+  };
+  return c.json(payload);
+});
+
+trackRoutes.post('/:token/pay', async (c) => {
+  await rateLimit(c, 'track-pay', 10, 600);
+  const b = await bookingFromToken(c);
+  const { kind } = await readJson(c, z.object({ kind: z.enum(['deposit', 'balance']).default('balance') }));
+  const settings = await getSettings(c.env.DB);
+  const customer = await first<{ email: string }>(c.env.DB, 'SELECT email FROM customers WHERE id = ?', b.customer_id);
+  const url = await createCheckout(c.env, b, kind === 'deposit' && b.paid_amount === 0 && b.deposit_due > 0 ? 'deposit' : 'balance', originOf(c), customer?.email ?? '', settings.business.name);
+  return c.json({ ok: true, url });
+});
+
+trackRoutes.post('/:token/cancel', async (c) => {
+  await rateLimit(c, 'track-cancel', 5, 3600);
+  const b = await bookingFromToken(c);
+  const { reason } = await readJson(c, z.object({ reason: z.string().trim().max(300).default('') }));
+  const settings = await getSettings(c.env.DB);
+  if (!['pending', 'confirmed'].includes(b.status)) fail(409, 'This booking can no longer be cancelled online — please call us.');
+  if (b.date <= todayIn(settings.business.timezone)) fail(409, `On-the-day changes need a quick call: ${settings.business.phone}.`);
+  const customer = await first<{ name: string }>(c.env.DB, 'SELECT name FROM customers WHERE id = ?', b.customer_id);
+  await setStatus(c.env, settings, b.id, 'cancelled', customer?.name ?? 'Customer', originOf(c), { reason: `Cancelled by customer${reason ? `: ${reason}` : ''}` });
+  await audit(c, 'cancel', 'booking', b.id, `Customer cancelled ${b.ref}`, { reason }, { type: 'customer', id: b.customer_id, name: customer?.name ?? 'Customer' });
+  c.executionCtx.waitUntil(pushOwner(c.env, `Cancelled: ${b.ref}`, `${customer?.name ?? 'Customer'} cancelled their ${b.date} booking online.${reason ? ` Reason: ${reason}` : ''}`, `${originOf(c)}/admin#/bookings/${b.id}`, 4, ['x']));
+  return c.json({ ok: true });
+});
+
+trackRoutes.post('/:token/feedback', async (c) => {
+  await rateLimit(c, 'feedback', 5, 3600);
+  const b = await bookingFromToken(c);
+  if (b.status !== 'completed') fail(409, 'You can leave feedback once the job is complete.');
+  const input = await readJson(c, z.object({ rating: z.number().int().min(1).max(5), body: z.string().trim().max(2000).default(''), name: z.string().trim().max(80).default('') }));
+  const db = c.env.DB;
+  const existing = await first<{ id: number }>(db, "SELECT id FROM reviews WHERE booking_id = ? AND source = 'site'", b.id);
+  const customer = await first<{ name: string }>(db, 'SELECT name FROM customers WHERE id = ?', b.customer_id);
+  const vehicle = (await bookingVehicles(db, b.id))[0];
+  const author = input.name || `${(customer?.name ?? 'Customer').split(' ')[0]}${customer?.name?.includes(' ') ? ` ${customer.name.split(' ').pop()![0]}.` : ''}`;
+  let id: number;
+  if (existing) {
+    await run(db, 'UPDATE reviews SET rating = ?, body = ?, author = ? WHERE id = ?', input.rating, input.body, author, existing.id);
+    id = existing.id;
+  } else {
+    id = (await run(db, "INSERT INTO reviews (source, booking_id, author, rating, body, vehicle, visible) VALUES ('site', ?, ?, ?, ?, ?, 0)", b.id, author, input.rating, input.body, vehicle ? [vehicle.make, vehicle.model].filter(Boolean).join(' ') : '')).id;
+  }
+  c.executionCtx.waitUntil((async () => {
+    const s = await analyseReview(c.env, id, input.body, input.rating);
+    await emit(db, 'review.received', { id, booking_ref: b.ref, rating: input.rating, body: input.body, sentiment: s.label });
+    if (input.rating <= 3 || s.label === 'negative') {
+      await pushOwner(c.env, `${input.rating}★ feedback on ${b.ref}`, `${s.summary}${s.followUp ? `\nSuggested: ${s.followUp}` : ''}\n"${input.body.slice(0, 200)}"`, `${originOf(c)}/admin#/r/reviews`, 4, ['warning']);
+    }
+  })());
+  const settings = await getSettings(db);
+  return c.json({ ok: true, reviewUrl: input.rating >= 4 ? settings.business.googleReviewUrl : '' });
+});

@@ -252,6 +252,7 @@ export class Doc {
     this.ensure(rows.length * 16 + 22);
     for (const r of rows) {
       if (r.strong) {
+        this.y -= 9;
         this.page.drawRectangle({ x, y: this.y - 8, width: boxW, height: 25, color: C.obsidian });
         this.draw(r.label.toUpperCase(), x + 10, this.y, { size: 7.6, font: this.monoBold, color: C.white });
         this.draw(r.value, W - M - 10, this.y - 1, { size: 13, font: this.bold, color: C.white, align: 'right' });
@@ -290,13 +291,14 @@ export class Doc {
   /** Large verdict panel. */
   verdict(title: string, detail: string, tone: Tone): void {
     const lines = this.wrap(detail, 9.5, INNER - 40);
-    const h = 44 + lines.length * 13.5;
-    this.ensure(h + 10);
-    this.page.drawRectangle({ x: M, y: this.y - h + 14, width: INNER, height: h, color: C.panel, borderColor: toneColor(tone), borderWidth: 1.2 });
-    this.page.drawRectangle({ x: M, y: this.y - h + 14, width: 5, height: h, color: toneColor(tone) });
-    this.draw(title.toUpperCase(), M + 20, this.y - 8, { size: 14, font: this.bold, color: toneColor(tone) });
-    lines.forEach((line, i) => this.draw(line, M + 20, this.y - 26 - i * 13.5, { size: 9.5, color: C.body }));
-    this.y -= h + 4;
+    const h = 40 + lines.length * 13.5;
+    this.ensure(h + 16);
+    const top = this.y - 2;
+    this.page.drawRectangle({ x: M, y: top - h, width: INNER, height: h, color: C.panel, borderColor: toneColor(tone), borderWidth: 1.2 });
+    this.page.drawRectangle({ x: M, y: top - h, width: 5, height: h, color: toneColor(tone) });
+    this.draw(title.toUpperCase(), M + 20, top - 22, { size: 14, font: this.bold, color: toneColor(tone) });
+    lines.forEach((line, i) => this.draw(line, M + 20, top - 40 - i * 13.5, { size: 9.5, color: C.body }));
+    this.y = top - h - 20;
   }
 
   async image(bytes: Uint8Array, type: string, maxW: number, maxH: number, x = M): Promise<void> {

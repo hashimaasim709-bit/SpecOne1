@@ -20,6 +20,9 @@ export interface Settings {
   };
   branding: {
     logoMediaId: number | null;
+    /** Square PWA / favicon icons generated from the logo in the admin (192 and 512 px PNG). */
+    icon192MediaId: number | null;
+    icon512MediaId: number | null;
     themeDefault: 'dark' | 'light';
     heroHeadline: string;
     heroSub: string;
@@ -97,6 +100,8 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   branding: {
     logoMediaId: null,
+    icon192MediaId: null,
+    icon512MediaId: null,
     themeDefault: 'dark',
     heroHeadline: 'Dealer-level diagnostics. On your driveway.',
     heroSub: 'A fully equipped mobile laboratory for fault-finding, OEM coding, DPF recovery and restorative detailing across East Sussex. Fixed prices. Pay on completion.',

@@ -10,7 +10,7 @@
   "assets": { "directory": "./public", "binding": "ASSETS" },
 
   // Bundles the browser apps and compiles the SQL migrations before every dev/deploy.
-  "build": { "command": "node scripts/build.mjs", "watch_dir": ["client", "shared", "migrations"] },
+  "build": { "command": "node scripts/build.mjs", "watch_dir": ["client", "shared", "migrations", "src/routes", "src/services", "src/lib", "src/seed", "src/views"] },
 
   // D1 (SQLite). Leave "database_id" out to let `wrangler deploy` create the database
   // automatically, or run `npx wrangler d1 create specone` and paste the id here.
