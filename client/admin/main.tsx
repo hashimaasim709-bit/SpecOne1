@@ -17,6 +17,7 @@ import { JobCard } from './views/job';
 import { ChecklistView, LibraryView } from './views/library';
 import { ResourceView } from './views/resources';
 import { ConnectionsView } from './views/connections';
+import { HelpView } from './views/help';
 import { SettingsView } from './views/settings';
 
 export interface Me { id: number; name: string; email: string; role: string; permissions: Permission[] }
@@ -192,7 +193,7 @@ function navGroups(me: Me, counts: { inbox: number; pending: number }): [string,
     ['Money & stock', [{ href: 'reports', label: 'Reports & tax', icon: 'chart', perm: 'finance.read' }, r('expenses', 'money'), r('commissions', 'money', 'Commissions'), r('inventory', 'box', 'Stock & chemicals'), r('parts_requests', 'clipboard', 'Parts orders'), r('licences', 'key', 'Licences & tokens')]],
     ['Workshop', [{ href: 'library', label: 'Tech library', icon: 'book', perm: 'tech.read' }, r('dpf_logs', 'gauge', 'DPF log'), r('battery_tests', 'gauge', 'Battery tests'), r('flash_log', 'wrench', 'Flash log'), r('freeze_frames', 'chart', 'Freeze frames'), r('checklist_templates', 'clipboard', 'Checklists')]],
     ['Website & marketing', [{ href: 'settings/site', label: 'Website studio', icon: 'palette', perm: 'settings.write' }, r('pages', 'file', 'Website pages'), r('packages', 'tag', 'Services & prices'), r('plans', 'refresh', 'Plans'), r('upsell_rules', 'sparkle', 'Smart upsells'), r('pricing_rules', 'gauge', 'Peak pricing'), r('promo_codes', 'tag', 'Promo codes'), r('flyers', 'file', 'Flyer studio'), r('banners', 'megaphone', 'Banners'), r('gallery_items', 'camera', 'Lab gallery'), r('reviews', 'sparkle', 'Reviews'), { href: 'feedback', label: 'Feedback insights', icon: 'sparkle', perm: 'content.write' }, r('faqs', 'list', 'FAQs'), r('towns', 'today', 'Town pages'), r('fleet_portals', 'users', 'Fleet portals'), r('guides', 'book', 'Guides'), r('chatbot_rules', 'inbox', 'Chat auto-replies')]],
-    ['System', [{ href: 'connections', label: 'Connections', icon: 'globe', perm: 'settings.write' }, { href: 'settings', label: 'Settings', icon: 'settings' }, r('locations', 'today', 'Locations'), r('vans', 'car', 'Vans'), r('webhooks', 'external', 'Webhooks'), { href: 'settings/audit', label: 'Audit trail', icon: 'shield', perm: 'audit.read' }]],
+    ['System', [{ href: 'help', label: 'Help & tutorials', icon: 'book' }, { href: 'connections', label: 'Connections', icon: 'globe', perm: 'settings.write' }, { href: 'settings', label: 'Settings', icon: 'settings' }, r('locations', 'today', 'Locations'), r('vans', 'car', 'Vans'), r('webhooks', 'external', 'Webhooks'), { href: 'settings/audit', label: 'Audit trail', icon: 'shield', perm: 'audit.read' }]],
   ];
   return groups.map(([g, items]) => [g, items.filter((i) => !i.perm || can(me, i.perm))] as [string, NavItem[]]).filter(([, items]) => items.length);
 }
@@ -306,6 +307,7 @@ function Shell({ me, state, onLock }: { me: Me; state: AuthState; onLock: () => 
   else if (a === 'r' && b) view = <ResourceView key={b} resourceKey={b} me={me} openId={c} />;
   else if (a === 'settings') view = <SettingsView me={me} section={b ?? 'business'} />;
   else if (a === 'connections') view = <ConnectionsView me={me} />;
+  else if (a === 'help') view = <HelpView me={me} openId={b} from={hashQuery().get('from') ?? undefined} />;
   else view = <div class="empty">Page not found. <a href="#/dashboard">Go to dashboard</a></div>;
 
   const toggleTheme = () => {
@@ -329,6 +331,7 @@ function Shell({ me, state, onLock }: { me: Me; state: AuthState; onLock: () => 
           <div class="row" style="margin-left:auto;gap:6px;flex-wrap:nowrap">
             {!online && <span class="badge badge-warn offline-pill"><span class="dot" />Offline{queued ? ` · ${queued} queued` : ''}</span>}
             {online && queued > 0 && <span class="badge badge-info">{queued} syncing</span>}
+            <a class="btn btn-ghost btn-icon help-btn" href={`#/help?from=${encodeURIComponent(route.join('/'))}`} title="How do I use this screen?" aria-label="Help for this screen">?</a>
             <a class="btn btn-ghost btn-icon" href="/" target="_blank" rel="noopener" title="Open website" aria-label="Open website"><Icon name="external" /></a>
             <button class="btn btn-ghost btn-icon" type="button" onClick={toggleTheme} aria-label="Toggle theme"><Icon name="moon" /></button>
             <button class="btn btn-ghost btn-icon" type="button" onClick={onLock} aria-label="Lock" title="Lock now"><Icon name="lock" /></button>

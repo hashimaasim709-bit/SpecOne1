@@ -223,3 +223,21 @@ a.list-row:hover { background: var(--surface-2); border-radius: 10px; }
 .copy-block summary::-webkit-details-marker { display: none; }
 .copy-block[open] { padding-bottom: 12px; }
 .copy-block[open] summary { border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+
+/* Help centre & getting-started checklist */
+.help-btn { font-weight: 800; font-size: 1rem; }
+.tut { padding: 0; }
+.tut-head { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 16px; background: none; border: 0; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.tut-head .grow { flex: 1; min-width: 0; }
+.tut-head svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.tut-open { border-color: var(--accent-line); }
+.tut-open > .stack { padding: 0 16px 16px; margin-top: 0 !important; }
+.tut-steps { margin: 0; padding: 0; list-style: none; counter-reset: tut; display: grid; gap: 10px; }
+.tut-steps li { counter-increment: tut; display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: start; color: var(--text-2); }
+.tut-steps li::before { content: counter(tut); display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-hi); font-family: var(--font-mono); font-size: 0.78rem; font-weight: 700; }
+.onboarding { border-color: var(--accent-line); }
+.onboarding .list-row { flex-wrap: wrap; }
+.onboarding .is-done b { color: var(--muted); text-decoration: line-through; font-weight: 500; }
+.tick { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line-3); }
+.tick.on { background: var(--good); border-color: var(--good); color: #04120c; }
+.tick svg { width: 14px; height: 14px; }

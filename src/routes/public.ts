@@ -18,6 +18,7 @@ import { findPromo, getAvailability, getLocation, getQuoteConfig } from '../serv
 import { autoReply, FALLBACK_REPLY } from '../services/chatbot';
 import { geocodePostcode, hasAddressLookup, lookupAddresses, lookupReg } from '../services/lookups';
 import { LIMITS, storeMedia } from '../services/media';
+import { siteSearch } from '../services/search';
 import { emailLayout, pushOwner, sendEmail } from '../services/notify';
 import { createCheckout, paymentsEnabled } from '../services/payments';
 import { emit } from '../services/webhooks';
@@ -88,6 +89,16 @@ publicRoutes.post('/promo', async (c) => {
   const { promo, error } = await findPromo(c.env.DB, upper, todayIn(loc.timezone), c.get('customer')?.id);
   if (!promo) return c.json({ ok: false, error }, 404);
   return c.json({ ok: true, kind: 'promo', promo });
+});
+
+// ── Site search & symptom advisor ──
+publicRoutes.get('/search', async (c) => {
+  await rateLimit(c, 'search', 90, 600);
+  const q = (c.req.query('q') ?? '').trim().slice(0, 80);
+  const loc = await getLocation(c.env.DB);
+  const hits = await siteSearch(c.env.DB, q, loc.currency);
+  c.header('Cache-Control', 'public, max-age=120');
+  return c.json({ q, hits });
 });
 
 publicRoutes.get('/dtc', async (c) => {

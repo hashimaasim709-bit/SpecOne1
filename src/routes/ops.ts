@@ -371,3 +371,41 @@ opsRoutes.post('/dtc/import', async (c) => {
   await audit(c, 'import', 'dtc_codes', 'bulk', `Imported fault codes: ${added} added, ${updated} updated`);
   return c.json({ ok: true, added, updated, skipped: skipped.slice(0, 20), skippedCount: skipped.length });
 });
+
+// ───────────────────────────── Getting-started checklist ─────────────────────────────
+const MANUAL_STEPS = ['business', 'prices'];
+
+opsRoutes.get('/onboarding', async (c) => {
+  const staff = staffOrFail(c);
+  noStore(c);
+  const db = c.env.DB;
+  const settings = await getSettings(db);
+  const [passkeys, gallery, bookings, flag] = await Promise.all([
+    first<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM passkeys WHERE user_id = ?', staff.id),
+    first<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM gallery_items'),
+    first<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM bookings'),
+    first<{ value: string }>(db, "SELECT value FROM settings WHERE key = 'flag:onboarding_done'"),
+  ]);
+  const manual = parseJson<string[]>(flag?.value, []);
+  const items = [
+    { key: 'alerts', label: 'Get booking alerts on your phone', done: !!(c.env.NTFY_TOPIC || c.env.TELEGRAM_BOT_TOKEN), href: 'connections', tutorial: 'alerts' },
+    { key: 'face-id', label: 'Sign in with Face ID or fingerprint', done: (passkeys?.n ?? 0) > 0, href: 'settings/security', tutorial: 'face-id' },
+    { key: 'logo', label: 'Upload your logo', done: !!settings.branding.logoMediaId, href: 'settings/branding', tutorial: 'logo' },
+    { key: 'business', label: 'Check your phone number, hours and links', done: manual.includes('business'), href: 'settings/business', tutorial: 'business' },
+    { key: 'prices', label: 'Check your prices', done: manual.includes('prices'), href: 'r/packages', tutorial: 'prices' },
+    { key: 'email', label: 'Connect email for confirmations and invoices', done: !!c.env.RESEND_API_KEY, href: 'connections', tutorial: 'alerts' },
+    { key: 'gallery', label: 'Add your first before-and-after photo', done: (gallery?.n ?? 0) > 0, href: 'r/gallery_items', tutorial: 'gallery' },
+    { key: 'booking', label: 'Take your first booking', done: (bookings?.n ?? 0) > 0, href: 'quick', tutorial: 'quick-book' },
+  ].map((i) => ({ ...i, manual: MANUAL_STEPS.includes(i.key) }));
+  return c.json({ items });
+});
+
+opsRoutes.post('/onboarding/:key', async (c) => {
+  staffOrFail(c, 'settings.write');
+  const key = c.req.param('key');
+  if (!MANUAL_STEPS.includes(key)) fail(404, 'Unknown step.');
+  const flag = await first<{ value: string }>(c.env.DB, "SELECT value FROM settings WHERE key = 'flag:onboarding_done'");
+  const done = [...new Set([...parseJson<string[]>(flag?.value, []), key])];
+  await run(c.env.DB, "INSERT INTO settings (key, value) VALUES ('flag:onboarding_done', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", JSON.stringify(done));
+  return c.json({ ok: true });
+});

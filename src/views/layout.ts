@@ -188,7 +188,7 @@ ${o.noindex ? raw('<meta name="robots" content="noindex">') : ''}
 <link rel="preload" href="/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/barlow-condensed-700.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${asset('site.css')}">
-<script nonce="${nonce}">try{var t=localStorage.getItem('s1-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+<script nonce="${nonce}">document.documentElement.classList.add('js');try{var t=localStorage.getItem('s1-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 ${ld.map((d) => html`<script type="application/ld+json" nonce="${nonce}">${jsonForScript(d)}</script>`)}
 </head>
 <body class="${[mobileBar ? 'has-mobile-bar' : '', o.bodyClass ?? ''].join(' ').trim()}">
@@ -201,18 +201,20 @@ ${promo ? html`<div class="strip strip-promo" data-banner="${promo.id}" hidden><
     ${brandMark(shell)}
     <nav class="nav-links" aria-label="Main">${NAV.map(([href, label]) => html`<a href="${href}"${o.path === href || o.path.startsWith(`${href}/`) ? raw(' aria-current="page"') : ''}>${label}</a>`)}</nav>
     <div class="nav-actions">
+      <button class="btn btn-ghost btn-icon" type="button" data-search-open aria-label="Search the site" title="Search ( / )">${icon('search')}</button>
       <button class="btn btn-ghost btn-icon theme-toggle" type="button" data-theme-toggle aria-label="Switch light or dark mode">${icon('moon', 'moon')}${icon('sun', 'sun')}</button>
       <a class="btn btn-ghost btn-sm btn-call" href="tel:${normPhone(b.phone)}">${icon('phone')}<span class="mono">${b.phone}</span></a>
       <a class="btn btn-primary btn-sm btn-book" href="/book">Book a visit</a>
       <button class="btn btn-ghost btn-icon nav-toggle" type="button" data-menu-open aria-label="Open menu">${icon('menu')}</button>
     </div>
   </div>
+  <div class="revbar" aria-hidden="true"><span data-revbar></span></div>
 </header>
 <div class="sheet" data-menu aria-hidden="true">
   <div class="sheet-backdrop" data-menu-close></div>
   <div class="sheet-panel" role="dialog" aria-label="Menu">
     <div class="spread" style="margin-bottom:10px">${brandMark(shell)}<button class="btn btn-ghost btn-icon" type="button" data-menu-close aria-label="Close menu">${icon('x')}</button></div>
-    ${[['/book', 'Book a visit'], ...NAV.filter(([href]) => href !== '/contact'), ['/gallery', 'Lab gallery'], ['/emergency', 'Emergency call-out'], ['/mot-reminder', 'Free MOT reminder'], ...(f.tradeInNav ? [] : [['/trade', 'Trade portal']]), ...(f.rateCardInNav ? [] : [['/rate-card', 'Price list']]), ['/reviews', 'Reviews'], ['/guides', 'Guides'], ['/faq', 'FAQ'], ...shell.pages.filter((p) => p.menu).slice(2).map((p) => [`/${p.slug}`, p.label]), ['/contact', 'Contact & help'], ['/account', 'My garage']].map(([href, label]) => html`<a class="sheet-link" href="${href}">${label}${icon('arrow')}</a>`)}
+    ${[['/book', 'Book a visit'], ...NAV.filter(([href]) => href !== '/contact'), ['/gallery', 'Lab gallery'], ['/emergency', 'Emergency call-out'], ['/warning-lights', 'Warning-light guide'], ['/mot-reminder', 'Free MOT reminder'], ...(f.tradeInNav ? [] : [['/trade', 'Trade portal']]), ...(f.rateCardInNav ? [] : [['/rate-card', 'Price list']]), ['/reviews', 'Reviews'], ['/guides', 'Guides'], ['/faq', 'FAQ'], ...shell.pages.filter((p) => p.menu).slice(2).map((p) => [`/${p.slug}`, p.label]), ['/contact', 'Contact & help'], ['/account', 'My garage']].map(([href, label]) => html`<a class="sheet-link" href="${href}">${label}${icon('arrow')}</a>`)}
     <div style="margin-top:auto;display:grid;gap:10px;padding-top:16px">
       <a class="btn btn-sos btn-block" href="tel:${normPhone(b.phone)}">${icon('phone')} Call ${b.phone}</a>
       <a class="btn btn-block" href="https://wa.me/${wa}" rel="noopener" target="_blank">${icon('whatsapp')} WhatsApp us</a>
@@ -244,6 +246,21 @@ ${s.integrations.chat ? html`<section class="chat-panel" data-chat-panel hidden 
     <div class="input-group"><input class="input" name="message" placeholder="Type your message…" required maxlength="1500" autocomplete="off"><button class="btn btn-primary btn-icon" type="submit" aria-label="Send">${icon('arrow')}</button></div>
   </form>
 </section>` : ''}
+<div class="search" data-search hidden role="dialog" aria-modal="true" aria-label="Search">
+  <div class="search-backdrop" data-search-close></div>
+  <div class="search-panel">
+    <form class="search-bar" data-search-form role="search" action="/fault-codes">${icon('search')}<input class="search-input" type="search" name="q" placeholder="Describe a fault or search…" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="80" aria-label="Search the site" data-search-input><button class="btn btn-ghost btn-sm" type="button" data-search-close>Close</button></form>
+    <div class="search-results" data-search-results aria-live="polite">
+      <div class="search-suggest">
+        <span class="search-label">Try</span>
+        <div class="chip-row">${['Engine light on', 'Limp mode', 'DPF warning', 'Activate CarPlay', 'Battery keeps going flat', 'Spare key', 'Prices', 'Track my booking'].map((q) => html`<button class="chip" type="button" data-search-q="${q}">${q}</button>`)}</div>
+        <span class="search-label">Quick links</span>
+        <div class="search-links"><a href="/book">${icon('calendar')} Book a visit</a><a href="/warning-lights">${icon('alert')} Warning-light guide</a><a href="/fault-codes">${icon('search')} Fault-code library</a><a href="/rate-card">${icon('tag')} Price list</a><a href="/contact">${icon('mail')} Contact &amp; help</a><a href="/account">${icon('user')} My garage</a></div>
+      </div>
+    </div>
+    <div class="search-foot"><span>${emblem('emblem')} Ask the lab — services, fault codes, warning lights and guides</span><span class="search-keys"><kbd>↑</kbd><kbd>↓</kbd> move <kbd>Enter</kbd> open <kbd>Esc</kbd> close</span></div>
+  </div>
+</div>
 <div class="lightbox" data-lightbox hidden role="dialog" aria-modal="true" aria-label="Image viewer"><button class="btn btn-icon lightbox-close" type="button" data-lightbox-close aria-label="Close">${icon('x')}</button><div class="lightbox-inner" data-lightbox-content></div></div>
 <script type="application/json" id="s1-config" nonce="${nonce}">${jsonForScript(client)}</script>
 <script type="module" src="${asset('site.js')}" nonce="${nonce}"></script>
@@ -256,7 +273,13 @@ function renderFooter(shell: Shell): SafeHtml {
   const b = shell.settings.business;
   const social = b.social;
   const year = new Date().getUTCFullYear();
+  const tag = shell.settings.branding.heroHeadline;
+  const cut = tag.indexOf('. ');
   return html`<footer class="footer">
+  <div class="wrap footer-brandline">
+    <p class="display">${cut > 0 ? html`${tag.slice(0, cut + 1)} <span class="accent">${tag.slice(cut + 2)}</span>` : tag}</p>
+    <div class="row"><span class="spec-stripe" aria-hidden="true"><i></i><i></i><i></i></span><a class="btn btn-primary" href="/book">Book a visit ${icon('arrow')}</a><a class="btn" href="/contact">Ask a question</a></div>
+  </div>
   <div class="wrap">
     <div class="footer-grid">
       <div>
@@ -272,7 +295,7 @@ function renderFooter(shell: Shell): SafeHtml {
       </div>
       <div>
         <h4>Services</h4>
-        <ul><li><a href="/services#diagnostics">Diagnostics &amp; coding</a></li><li><a href="/services#detailing">Detailing &amp; ceramic</a></li><li><a href="/services#plans">Maintenance plans</a></li><li><a href="/rate-card">Full price list</a></li><li><a href="/trade">Trade portal</a></li><li><a href="/fleet">Fleet accounts</a></li><li><a href="/emergency">Emergency call-out</a></li><li><a href="/coding">Coding matrix</a></li><li><a href="/fault-codes">Fault code library</a></li></ul>
+        <ul><li><a href="/services#diagnostics">Diagnostics &amp; coding</a></li><li><a href="/services#detailing">Detailing &amp; ceramic</a></li><li><a href="/services#plans">Maintenance plans</a></li><li><a href="/rate-card">Full price list</a></li><li><a href="/trade">Trade portal</a></li><li><a href="/fleet">Fleet accounts</a></li><li><a href="/emergency">Emergency call-out</a></li><li><a href="/coding">Coding matrix</a></li><li><a href="/fault-codes">Fault code library</a></li><li><a href="/warning-lights">Warning-light guide</a></li><li><a href="/guides">Guides &amp; how-tos</a></li></ul>
       </div>
       <div>
         <h4>Areas</h4>
@@ -295,6 +318,7 @@ function renderFooter(shell: Shell): SafeHtml {
       <span class="row" style="gap:16px">${shell.pages.filter((p) => p.footer && !['privacy', 'terms', 'cookies'].includes(p.slug)).map((p) => html`<a href="/${p.slug}">${p.label}</a>`)}<a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/cookies">Cookies</a><button type="button" data-consent-reopen style="background:none;border:0;color:inherit;padding:0;font:inherit">Cookie settings</button><a href="/recovery-partners">Recovery partners</a><a href="/admin" rel="nofollow">Staff</a></span>
     </div>
   </div>
+  <div class="footer-wordmark" aria-hidden="true">${(b.name.split(' ')[0] ?? 'SpecOne').toUpperCase()}</div>
 </footer>`;
 }
 

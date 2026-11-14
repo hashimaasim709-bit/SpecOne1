@@ -230,8 +230,11 @@ interface SpeechRec { lang: string; continuous: boolean; interimResults: boolean
 function Dispatch({ d, me, reload }: { d: Detail; me: Me; reload: () => void }) {
   const [userId, setUserId] = useState<number | null>(d.booking.assigned_user_id);
   const [vanId, setVanId] = useState<number | null>(d.booking.van_id);
+  const [when, setWhen] = useState({ date: d.booking.date, slot: d.booking.slot });
   const [busy, act] = useAction();
   if (!can(me, 'bookings.write')) return null;
+  const open = !['completed', 'cancelled', 'no_show'].includes(d.booking.status);
+  const moved = when.date !== d.booking.date || when.slot !== d.booking.slot;
   return (
     <div class="panel stack" style="gap:10px">
       <h3>Dispatch</h3>
@@ -244,6 +247,17 @@ function Dispatch({ d, me, reload }: { d: Detail; me: Me; reload: () => void }) 
         if (r?.whatsapp && !r.sent.length && confirm('No SMS provider is set up. Send the job by WhatsApp instead?')) window.open(r.whatsapp, '_blank');
         reload();
       }}>Assign &amp; notify</button>
+      {open && (
+        <>
+          <h3 style="margin-top:6px">Move booking</h3>
+          <div class="form-grid">
+            <input class="input" type="date" aria-label="New date" value={when.date} onInput={(e) => setWhen({ ...when, date: (e.target as HTMLInputElement).value })} />
+            <select class="select" aria-label="New window" value={when.slot} onChange={(e) => setWhen({ ...when, slot: (e.target as HTMLSelectElement).value })}><option value="morning">Morning</option><option value="afternoon">Afternoon</option><option value="evening">Evening</option><option value="asap">ASAP / emergency</option></select>
+          </div>
+          <button class="btn btn-sm" style="align-self:flex-start" type="button" disabled={busy || !moved || !when.date} onClick={async () => { if (await act(() => send(`/bookings/${d.booking.id}`, when, 'PATCH'), 'Booking moved — the tracker is updated')) reload(); }}>Move booking</button>
+          <span class="hint">The customer's tracker shows the new time. Let them know with the WhatsApp buttons above.</span>
+        </>
+      )}
     </div>
   );
 }

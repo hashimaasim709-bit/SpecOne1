@@ -1,5 +1,6 @@
 // Site-wide behaviour for every public page.
 import { api, errorMessage, readConfig } from './lib/api';
+import './enhance';
 import type * as MapLib from './lib/map';
 import { $, $$, debounce, enableRipples, esc, installErrorReporting, money, store, toast } from './lib/ui';
 
