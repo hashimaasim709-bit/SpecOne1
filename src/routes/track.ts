@@ -46,6 +46,7 @@ trackRoutes.get('/:token', async (c) => {
     ]),
     all<EstimateRow>(db, "SELECT * FROM estimates WHERE booking_id = ? AND status != 'withdrawn' ORDER BY id DESC", b.id),
   ]);
+  const needsUtilities = await first<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM booking_items bi JOIN packages p ON p.id = bi.package_id WHERE bi.booking_id = ? AND p.needs_utilities = 1', b.id);
   const showVan = (b.status === 'en_route' || b.status === 'arrived') && van?.lat != null && van.position_at && Date.now() - Date.parse(van.position_at) < 30 * 60_000;
   const t = encodeURIComponent(b.access_token);
   const documents = [{ label: b.status === 'completed' ? 'Invoice' : 'Booking summary', href: `/track/${t}/invoice.pdf` }];
@@ -77,6 +78,7 @@ trackRoutes.get('/:token', async (c) => {
     reviewUrl: settings.business.googleReviewUrl,
     business: { name: settings.business.name, phone: settings.business.phone, whatsapp: settings.business.whatsapp },
     canReschedule: canReschedule(b, todayIn(settings.business.timezone)),
+    prep: ['pending', 'confirmed'].includes(b.status) ? prepList(b, needsUtilities?.n ? true : false, items.some((i) => /dpf|regeneration|inspection/i.test(i.name))) : [],
     estimates: estimates.map((e) => { const o = estimateOut(e); return { id: o.id, title: o.title, note: o.note, items: o.items, total: o.total, status: o.status as 'pending' | 'approved' | 'declined', decidedAt: o.decidedAt, createdAt: o.createdAt }; }),
   };
   return c.json(payload);
@@ -186,3 +188,15 @@ trackRoutes.post('/:token/reschedule', async (c) => {
   await emit(db, 'booking.updated', { ref: b.ref, date: input.date, slot: input.slot, rescheduled: true });
   return c.json({ ok: true, when });
 });
+
+/** Short checklist shown on the tracker before the visit, tailored to the job. */
+function prepList(b: BookingRow, utilities: boolean, roadTest: boolean): string[] {
+  const dropOff = b.service_mode === 'drop_off';
+  return [
+    'Have your keys ready, including the locking wheel nut key.',
+    dropOff ? 'Bring the car to the lab at the start of your window.' : 'Park where we can open the bonnet and doors fully.',
+    ...(utilities && !dropOff ? ['Detailing needs an outside tap and a 240 V socket within about 25 metres.', 'Empty the car, including the boot, and remove child seats.'] : []),
+    ...(roadTest ? ['Leave at least a quarter of a tank of fuel for the road test.'] : []),
+    'Tell us about any new symptoms or warning lights — a dashboard photo helps.',
+  ];
+}

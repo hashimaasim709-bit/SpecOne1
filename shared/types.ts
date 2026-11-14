@@ -227,6 +227,8 @@ export interface TrackPayload {
   reviewUrl: string;
   business: { name: string; phone: string; whatsapp: string };
   canReschedule: boolean;
+  /** Things to get ready before the visit (empty once the job is under way). */
+  prep: string[];
   estimates: { id: number; title: string; note: string; items: { name: string; qty: number; unitPrice: number }[]; total: number; status: 'pending' | 'approved' | 'declined'; decidedAt: string | null; createdAt: string }[];
 }
 

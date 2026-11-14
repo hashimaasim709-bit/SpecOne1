@@ -8,6 +8,7 @@ import { ComboChart, HBars, type Point } from '../charts';
 import { can, go, type Me } from '../main';
 import { Empty, Icon, PageTitle, Stale, StatusBadge, useAction } from '../ui';
 import { ControlDeck, TradeApplications } from './controls';
+import { Onboarding } from './help';
 
 interface Job { id: number; ref: string; status: BookingStatus; slot: string; emergency: number; address: string; postcode: string; total: number; customer_name: string; customer_phone: string; vehicles: string | null }
 interface Dash {
@@ -54,6 +55,7 @@ export function DashboardView({ me }: { me: Me }) {
         {k && <a class="stat" href="#/bookings?status=completed&unpaid=1" style="text-decoration:none"><small>Outstanding</small><b>{money(k.outstanding, CUR)}</b><span>{k.outstandingJobs} unpaid job{k.outstandingJobs === 1 ? '' : 's'}</span></a>}
       </div>
 
+      <Onboarding />
       <TradeApplications me={me} />
       <ControlDeck me={me} paused={can(me, 'settings.write') ? !!x.bookingPaused : null} onDone={() => void reload()} />
       <div class="cols">

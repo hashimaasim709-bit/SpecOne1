@@ -179,3 +179,16 @@ Admin → Settings → **Website studio** (owners and managers only):
 | **Free MOT reminders** | `/mot-reminder`: plate + contact → MOT date from the DVLA (or typed in) → reminder ~4 weeks before |
 | **Call-me-back** | Contact page: name, number and preferred time → priority phone alert |
 | **Trade area in My garage** | Approved trade customers see their trade code, discount, "Book at trade rates" and monthly statement PDFs |
+
+## Round 4 — brand polish, search, warning lights and tutorials
+
+| Feature | Where / how |
+|---|---|
+| **Brand polish** | Numbered spec tags on every section, tachometer watermark behind headings, rev-bar scroll indicator under the header, corner-bracket card hovers, outlined step numerals, scroll-in animation (off for reduced-motion), branded footer with tagline and wordmark. All follow the Website studio accent colour |
+| **Site search & symptom advisor** | Search button in the header, the box under the homepage buttons, or press `/`. Understands plain English ("limp mode", "car won't start", "CarPlay") as well as fault codes, and returns services, codes, warning lights, guides, FAQs and pages |
+| **Warning-light guide** | `/warning-lights`: 18 dashboard lights with original icons — what it means, whether to keep driving, what we do, and a one-tap booking with the symptom filled in |
+| **Customer how-to guides** | 9 new guides (engine light, limp mode, AdBlue countdown, flat batteries, reading fault codes, used-car checks, how booking works, preparing for a visit, reading your report) with a category filter on `/guides` |
+| **Before we arrive** | The tracker shows a short checklist tailored to the job until the technician sets off |
+| **Admin Help centre** | Admin → Help & tutorials: 29 step-by-step guides with search and a "take me there" button. The **?** button in the top bar opens the guide for the screen you are on |
+| **Getting-started checklist** | Dashboard: ticks itself off as you connect alerts, add Face ID, upload a logo, add photos and take a first booking |
+| **Move a booking (staff)** | Job card → Dispatch → Move booking |

@@ -287,6 +287,13 @@ function App() {
               }}><Svg d={P.card} /> Pay {money(data.balance, cur)} — Apple Pay, Google Pay or card</button>
             )}
           </div>
+          {data.prep?.length > 0 && (
+            <div class="card stack" style="gap:10px">
+              <h3>Before we arrive</h3>
+              <ul class="includes">{data.prep.map((p) => <li>{p}</li>)}</ul>
+              <a class="faint" style="font-size:.84rem" href="/guides/prepare-for-your-mobile-visit">Full guide: how to prepare for your visit →</a>
+            </div>
+          )}
           {data.documents.length > 0 && (
             <div class="card stack" style="gap:10px">
               <h3>Documents</h3>

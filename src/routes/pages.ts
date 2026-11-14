@@ -214,6 +214,7 @@ pageRoutes.get('/', async (c) => {
     <h1 class="display">${headline[0]}${headline[1] ? html`<span class="line-accent">${headline[1]}</span>` : ''}</h1>
     <p class="lead">${s.branding.heroSub}</p>
     <div class="hero-ctas"><a class="btn btn-primary btn-lg" href="/book">Book a visit ${icon('arrow')}</a><a class="btn btn-sos btn-lg" href="/emergency">${icon('alert')} Emergency call-out</a></div>
+    <button class="hero-search" type="button" data-search-open>${icon('search')}<span>Describe the fault — “limp mode”, “P2002”, “CarPlay”…</span><kbd>/</kbd></button>
     <div class="hero-trust">${s.business.credentials.map((cr) => html`<span>${icon('check')}${cr}</span>`)}</div>
   </div>
   ${panel === 'telemetry' ? telemetryCard : panel === 'contact' ? contactCard : ''}
@@ -269,7 +270,7 @@ pageRoutes.get('/', async (c) => {
       : '';
 
   const lookup = html`<section class="section"><div class="wrap"><div class="grid grid-2" style="align-items:center">
-  <div><span class="eyebrow">Fault code library</span><h2 class="display">Got a code?<br><span class="accent">Decode it.</span></h2><p class="lead">Type a code from your scanner or MOT advisory for its meaning, likely causes, and how we would pinpoint it.</p></div>
+  <div><span class="eyebrow">Fault code library</span><h2 class="display">Got a code?<br><span class="accent">Decode it.</span></h2><p class="lead">Type a code from your scanner or MOT advisory for its meaning, likely causes, and how we would pinpoint it.</p><a class="btn" href="/warning-lights">${icon('alert')} No code? Pick your warning light</a></div>
   <div class="card"><form class="dtc-search" data-dtc-search action="/fault-codes">${icon('search')}<input class="input" name="q" placeholder="e.g. P2002, U0100" autocomplete="off" maxlength="20" aria-label="Fault code"></form><div class="dtc-results" data-dtc-results></div></div>
 </div></div></section>`;
 
@@ -524,10 +525,14 @@ pageRoutes.get('/guides', async (c) => {
   const shell = await loadShell(c);
   const guides = await all<{ slug: string; title: string; excerpt: string; season: string; category: string; read_minutes: number; published_on: string }>(c.env.DB, 'SELECT slug, title, excerpt, season, category, read_minutes, published_on FROM guides WHERE active = 1 ORDER BY published_on DESC');
   const bc = crumbs(shell, [['/guides', 'Guides']]);
+  const guideCats = [...new Set(guides.map((g) => g.category))].sort();
   return c.html(renderPage(c, shell, {
     title: 'Car Care & Diagnostics Guides', description: 'Seasonal detailing advice and plain-English diagnostics guides from the SpecOne lab.', path: '/guides', jsonLd: [bc.ld],
-    body: html`<section class="page-head grid-bg"><div class="wrap">${bc.html}<span class="eyebrow">Guides</span><h1 class="display">From the workbench</h1><p class="lead">Practical advice to keep your car healthy between visits.</p></div></section>
-<section class="section-tight"><div class="wrap"><div class="grid grid-3">${guides.map((g) => html`<a class="card card-link stack" href="/guides/${g.slug}"><span class="row"><span class="badge badge-accent">${g.season === 'all' ? g.category : g.season}</span><span class="meta">${g.read_minutes} min read</span></span><h3>${g.title}</h3><p class="muted" style="margin:0">${g.excerpt}</p><span class="meta">${formatDate(g.published_on)}</span></a>`)}</div></div></section>`,
+    body: html`<section class="page-head grid-bg"><div class="wrap">${bc.html}<span class="eyebrow">Guides &amp; how-tos</span><h1 class="display">From the <span class="accent">workbench</span></h1><p class="lead">Plain-English guides: what warning lights mean, how our visits work, and how to keep your car healthy between them.</p>
+  <div class="row" style="margin-top:18px"><a class="btn" href="/warning-lights">${icon('alert')} Warning-light guide</a><a class="btn" href="/fault-codes">${icon('search')} Fault-code library</a></div></div></section>
+<section class="section-tight"><div class="wrap">
+  ${guideCats.length > 1 ? html`<div class="filter-bar" data-gallery-filter><button class="chip is-on" type="button" data-tag="">All guides</button>${guideCats.map((t) => html`<button class="chip" type="button" data-tag="${t.toLowerCase()}">${t}</button>`)}</div>` : ''}
+  <div class="grid grid-3" data-gallery>${guides.map((g) => html`<a class="card card-link stack" data-tags="${g.category.toLowerCase()}" href="/guides/${g.slug}"><span class="row"><span class="badge badge-accent">${g.season === 'all' ? g.category : g.season}</span><span class="meta">${g.read_minutes} min read</span></span><h3>${g.title}</h3><p class="muted" style="margin:0">${g.excerpt}</p><span class="meta">${formatDate(g.published_on)}</span></a>`)}</div></div></section>`,
   }));
 });
 

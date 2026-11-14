@@ -2,6 +2,7 @@
 // plus their printable PDF versions. Mounted before the catch-all town-page route.
 import { Hono } from 'hono';
 import { CONTACT_TOPICS, FLYER_TEMPLATES, type FlyerTemplate } from '../../shared/constants';
+import { VERDICTS, WARNING_LIGHTS, type WarningLight } from '../../shared/warning-lights';
 import { formatDate, money, normPhone, todayIn } from '../../shared/format';
 import type { AppEnv, Ctx } from '../env';
 import { all, first, parseJson, run } from '../lib/db';
@@ -346,5 +347,46 @@ marketingRoutes.get('/mot-reminder', async (c) => {
     <a class="btn" style="align-self:flex-start" href="/services/pre-mot-health-scan">Pre-MOT health scan ${icon('arrow')}</a>
   </div>
 </div></section>`,
+  }));
+});
+
+// ───────────────────────────── Warning-light guide ─────────────────────────────
+const lightIcon = (l: WarningLight, cls = ''): SafeHtml => raw(`<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${l.icon}</svg>`);
+
+marketingRoutes.get('/warning-lights', async (c) => {
+  const shell = await loadShell(c);
+  const s = shell.settings;
+  const packages = await getPackages(c.env.DB);
+  const cur = (await getLocation(c.env.DB)).currency;
+  const bc = crumbs(shell, [['/warning-lights', 'Warning lights']]);
+  const tel = normPhone(s.business.phone);
+  const group = (colour: 'red' | 'amber') => WARNING_LIGHTS.filter((l) => l.colour === colour);
+  const tile = (l: WarningLight) => html`<a class="light-tile light-${l.colour}" href="#light-${l.key}" data-light="${l.key}"><span class="light-lamp">${lightIcon(l)}</span><span>${l.name}</span></a>`;
+  const panel = (l: WarningLight) => {
+    const pkg = packages.find((p) => p.slug === l.package);
+    const v = VERDICTS[l.verdict];
+    return html`<article class="card light-panel light-${l.colour}" id="light-${l.key}" data-light-panel="${l.key}">
+  <div class="light-panel-head"><span class="light-lamp light-lamp-lg">${lightIcon(l)}</span><div><span class="badge badge-${v.tone}">${v.label}</span><h2 class="h3" style="margin:8px 0 0">${l.name}</h2></div></div>
+  <div class="light-facts">
+    <div><span class="eyebrow">What it means</span><p>${l.meaning}</p></div>
+    <div><span class="eyebrow">What to do now</span><p>${l.now}</p></div>
+    <div><span class="eyebrow">What we do</span><p>${l.we}</p></div>
+  </div>
+  <div class="row">${pkg ? html`<a class="btn btn-primary" href="/book?package=${pkg.slug}&symptom=${encodeURIComponent(`${l.name} warning light on`)}&src=warning-lights">Book ${pkg.name.split(/[,&(]/)[0]!.trim()} · ${pkg.price_s === pkg.price_l ? '' : 'from '}${money(pkg.price_s, cur)} ${icon('arrow')}</a>` : html`<a class="btn btn-primary" href="/book?src=warning-lights">Book a visit ${icon('arrow')}</a>`}${l.verdict === 'stop' ? html`<a class="btn btn-sos" href="tel:${tel}">${icon('phone')} Call ${s.business.phone}</a>` : html`<a class="btn" href="https://wa.me/${waOf(s)}?text=${encodeURIComponent(`Hi, my ${l.name.toLowerCase()} warning light is on. `)}" target="_blank" rel="noopener">${icon('whatsapp')} Send a photo</a>`}</div>
+</article>`;
+  };
+  return c.html(renderPage(c, shell, {
+    title: 'Dashboard Warning Lights Explained', description: `What each dashboard warning light means, whether it is safe to keep driving, and how ${s.business.name} diagnoses it at your home or work.`, path: '/warning-lights',
+    jsonLd: [bc.ld, { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: WARNING_LIGHTS.map((l) => ({ '@type': 'Question', name: `What does the ${l.name.toLowerCase()} warning light mean?`, acceptedAnswer: { '@type': 'Answer', text: `${l.meaning} ${l.now}` } })) }],
+    body: html`<section class="page-head grid-bg"><div class="wrap">${bc.html}<span class="eyebrow">Warning-light guide</span><h1 class="display">What is that<br><span class="accent">light telling you?</span></h1><p class="lead">Tap the light on your dashboard to see what it means, whether it is safe to keep driving, and what we would do about it. Red means stop when it is safe; amber means get it checked soon.</p></div></section>
+<section class="section-tight"><div class="wrap lights" data-lights>
+  <div class="lights-pick">
+    <div class="lights-group"><span class="lights-label lights-label-red">Red — stop when safe</span><div class="lights-grid">${group('red').map(tile)}</div></div>
+    <div class="lights-group"><span class="lights-label lights-label-amber">Amber — check soon</span><div class="lights-grid">${group('amber').map(tile)}</div></div>
+    <p class="faint" style="font-size:.82rem;margin:0">Symbols vary a little between makes. Not sure which one you have? <a href="https://wa.me/${waOf(s)}" target="_blank" rel="noopener">WhatsApp us a photo</a> of your dashboard.</p>
+  </div>
+  <div class="lights-panels">${WARNING_LIGHTS.map(panel)}</div>
+</div></section>
+<section class="section-tight"><div class="wrap"><div class="card grid grid-2" style="align-items:center"><div><span class="eyebrow">Have a code already?</span><h2 class="display" style="font-size:2rem">Look it up in the fault-code library</h2><p class="muted" style="margin:10px 0 0">Plain-English meanings, likely causes and how we would pinpoint each one.</p></div><form class="dtc-search" action="/fault-codes">${icon('search')}<input class="input" name="q" placeholder="e.g. P2002, U0100" autocomplete="off" maxlength="20" aria-label="Fault code"></form></div></div></section>`,
   }));
 });

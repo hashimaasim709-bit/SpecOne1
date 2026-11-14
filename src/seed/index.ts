@@ -4,6 +4,7 @@ import { run, stmt } from '../lib/db';
 import { BANNERS, CHATBOT_RULES, FAQS, GUIDES, TOWNS } from './content';
 import { INVENTORY, LICENCES, LOCATION, PACKAGES, PARTNERS, PLANS, PRICING_RULES, PROMOS, UPSELLS, VAN } from './catalog';
 import { DTC_EXTRA } from './dtc-extra';
+import { GUIDES_EXTRA } from './guides-extra';
 import { CHECKLISTS, CODING_MATRIX, DTC_CODES, TECH_GUIDES, TORQUE_SPECS, WIRING_REFS } from './technical';
 
 const SEED_VERSION = '1';
@@ -25,6 +26,7 @@ async function batched(db: D1Database, statements: D1PreparedStatement[], size =
  */
 const CONTENT_PACKS: { flag: string; rows: () => [string, Record<string, unknown>[]][] }[] = [
   { flag: 'content_dtc_v2', rows: () => [['dtc_codes', DTC_EXTRA]] },
+  { flag: 'content_guides_v2', rows: () => [['guides', GUIDES_EXTRA]] },
 ];
 
 async function contentPacks(db: D1Database): Promise<void> {
