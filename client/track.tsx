@@ -99,8 +99,91 @@ function Feedback({ data }: { data: TrackPayload }) {
   );
 }
 
+/** Extra work found on the job, waiting for the customer's OK (or already decided). */
+function Estimates({ data, onDecided }: { data: TrackPayload; onDecided: () => void }) {
+  const [busy, setBusy] = useState(0);
+  const [note, setNote] = useState<Record<number, string>>({});
+  if (!data.estimates?.length) return null;
+  const cur = data.currency;
+  const decide = async (id: number, decision: 'approve' | 'decline') => {
+    if (decision === 'decline' && !confirm('Decline this work? The technician will carry on with the original job only.')) return;
+    setBusy(id);
+    try {
+      await api(`/api/track/${token}/estimates/${id}`, { body: { decision, note: note[id] ?? '' } });
+      toast(decision === 'approve' ? 'Approved — the technician has been told and will carry on.' : 'Declined — the technician has been told.', { title: decision === 'approve' ? 'Approved' : 'Declined' });
+      onDecided();
+    } catch (e) {
+      toast(errorMessage(e), { icon: 'alert' });
+    } finally {
+      setBusy(0);
+    }
+  };
+  return (
+    <div class="stack" id={data.estimates.some((e) => e.status === 'pending') ? 'estimates' : undefined} style="gap:12px">
+      {data.estimates.map((e) => (
+        <div class={`card stack estimate estimate-${e.status}`} style="gap:10px">
+          <div class="spread"><span class="eyebrow" style="margin:0">{e.status === 'pending' ? 'Your approval needed' : 'Estimate'}</span><span class={`badge badge-${e.status === 'approved' ? 'good' : e.status === 'declined' ? 'bad' : 'accent'}`}>{e.status}</span></div>
+          <h3 style="margin:0">{e.title}</h3>
+          {e.note && <p class="muted" style="margin:0;white-space:pre-line">{e.note}</p>}
+          {e.items.map((it) => <div class="summary-line"><span>{it.qty !== 1 ? `${it.name} × ${it.qty}` : it.name}</span><span>{money(Math.round(it.qty * it.unitPrice), cur)}</span></div>)}
+          <div class="summary-total"><span class="muted">Estimate</span><b style="font-size:1.3rem">{money(e.total, cur)}</b></div>
+          {e.status === 'pending' ? (
+            <>
+              <input class="input" placeholder="Add a note for the technician (optional)" maxLength={500} value={note[e.id] ?? ''} onInput={(ev) => setNote({ ...note, [e.id]: (ev.target as HTMLInputElement).value })} />
+              <div class="row" style="flex-wrap:nowrap">
+                <button type="button" class="btn btn-primary" style="flex:1" disabled={busy === e.id} onClick={() => decide(e.id, 'approve')}>Approve {money(e.total, cur)}</button>
+                <button type="button" class="btn" disabled={busy === e.id} onClick={() => decide(e.id, 'decline')}>Decline</button>
+              </div>
+              <p class="faint" style="margin:0;font-size:.8rem">Approving adds this work to your invoice. Questions first? Call {data.business.phone}.</p>
+            </>
+          ) : e.decidedAt && <p class="faint" style="margin:0;font-size:.82rem">{e.status === 'approved' ? 'Approved' : 'Declined'} {formatDateTime(e.decidedAt)}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const SLOT_NAMES: Record<string, string> = { morning: 'Morning', afternoon: 'Afternoon', evening: 'Evening' };
+
+/** Customer self-service: pick another open day and window. */
+function Reschedule({ onDone }: { onDone: () => void }) {
+  const [days, setDays] = useState<{ date: string; slots: string[] }[] | null>(null);
+  const [pick, setPick] = useState<{ date: string; slot: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api<{ days: { date: string; slots: string[] }[] }>(`/api/track/${token}/availability`).then((r) => setDays(r.days)).catch(() => setDays([]));
+  }, []);
+  if (!days) return <div class="skeleton" style="height:120px" />;
+  if (!days.length) return <p class="muted" style="margin:0">No other times are free online right now — please call us to move your booking.</p>;
+  const day = days.find((d) => d.date === pick?.date);
+  return (
+    <div class="stack" style="gap:12px">
+      <div class="resched-days" role="listbox" aria-label="Choose a day">{days.slice(0, 21).map((d) => (
+        <button type="button" role="option" aria-selected={pick?.date === d.date} class="resched-day" onClick={() => setPick({ date: d.date, slot: d.slots[0]! })}>
+          <small>{formatDate(d.date, 'day').split(' ')[0]}</small><b>{d.date.slice(8)}</b><small>{new Date(`${d.date}T12:00:00Z`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })}</small>
+        </button>
+      ))}</div>
+      {day && <div class="row">{day.slots.map((sl) => <button type="button" class="chip" aria-pressed={pick?.slot === sl} onClick={() => setPick({ date: day.date, slot: sl })}>{SLOT_NAMES[sl] ?? sl}</button>)}</div>}
+      <button type="button" class="btn btn-primary" disabled={!pick || busy} onClick={async () => {
+        if (!pick) return;
+        setBusy(true);
+        try {
+          const r = await api<{ ok: boolean; when?: string }>(`/api/track/${token}/reschedule`, { body: pick });
+          toast(r.when ? `Moved to ${r.when}` : 'No change', { title: 'Booking updated' });
+          onDone();
+        } catch (e) {
+          toast(errorMessage(e), { icon: 'alert' });
+        } finally {
+          setBusy(false);
+        }
+      }}>{pick ? `Move to ${formatDate(pick.date, 'day')} · ${SLOT_NAMES[pick.slot]}` : 'Choose a new day'}</button>
+    </div>
+  );
+}
+
 function App() {
   const [data, setData] = useState<TrackPayload | null>(null);
+  const [moving, setMoving] = useState(false);
   const [error, setError] = useState('');
   const [paying, setPaying] = useState(false);
 
@@ -148,6 +231,7 @@ function App() {
 
       <div class="track-layout">
         <div class="stack">
+          {data.estimates?.some((e) => e.status === 'pending') && <Estimates data={{ ...data, estimates: data.estimates.filter((e) => e.status === 'pending') }} onDecided={() => void load()} />}
           {data.status === 'en_route' && (
             <div class="card card-glass eta">
               <span style="color:var(--accent-hi)"><Svg d={P.van} size={42} /></span>
@@ -174,6 +258,7 @@ function App() {
               </ol>
             )}
           </div>
+          {data.estimates?.some((e) => e.status !== 'pending') && <Estimates data={{ ...data, estimates: data.estimates.filter((e) => e.status !== 'pending') }} onDecided={() => void load()} />}
           {data.status === 'completed' && <Feedback data={data} />}
         </div>
 
@@ -212,6 +297,8 @@ function App() {
             <a class="btn btn-block" href={`tel:${data.business.phone}`}><Svg d={P.phone} /> Call {data.business.phone}</a>
             <a class="btn btn-block" href={wa} target="_blank" rel="noopener"><Svg d={P.wa} /> WhatsApp</a>
             <a class="btn btn-block btn-ghost" href={`/track/${token}/calendar.ics`}><Svg d={P.cal} /> Add to calendar</a>
+            {data.canReschedule && <button type="button" class="btn btn-block" aria-expanded={moving} onClick={() => setMoving(!moving)}><Svg d={P.cal} /> Change date or time</button>}
+            {data.canReschedule && moving && <Reschedule onDone={() => { setMoving(false); void load(); }} />}
             {canCancel && <button type="button" class="btn btn-block btn-ghost" style="color:var(--bad)" onClick={async () => {
               const reason = prompt('Sorry to see you go — would you tell us why? (optional)');
               if (reason === null) return;

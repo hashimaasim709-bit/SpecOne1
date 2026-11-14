@@ -31,6 +31,8 @@ export interface Field {
   /** Set once on create, then locked (primary keys such as slugs and codes). */
   lockOnEdit?: boolean;
   upper?: boolean;
+  /** Multiselect options loaded live from another resource (value = slug, label = name). */
+  optionsFrom?: 'packages';
 }
 
 export interface Resource {
@@ -189,7 +191,7 @@ export const RESOURCES: Resource[] = [
   {
     key: 'partners', table: 'partners', pk: 'id', pkType: 'int', title: 'Trade & recovery partners', singular: 'partner', group: 'Customers',
     blurb: 'Bodyshops, auctions, garages and recovery firms. Bookings quoting a partner code accrue commission.',
-    read: 'crm.read', write: 'crm.write', search: ['name', 'code', 'contact_name'], orderBy: 'name', filter: 'kind', financeFields: ['commission_pct'],
+    read: 'crm.read', write: 'crm.write', search: ['name', 'code', 'contact_name', 'email'], orderBy: "CASE trade_status WHEN 'applied' THEN 0 ELSE 1 END, name", filter: 'trade_status', financeFields: ['commission_pct'],
     fields: [
       f('name', 'Business name', 'text', { required: true, list: true }),
       f('kind', 'Type', 'select', { options: ['bodyshop', 'auction', 'garage', 'fleet', 'recovery', 'other'], list: true }),
@@ -201,6 +203,8 @@ export const RESOURCES: Resource[] = [
       f('commission_pct', 'Referral commission %', 'percent', { def: 10, list: true }),
       f('customer_discount_pct', 'Discount for their customers %', 'percent', { def: 0 }),
       f('public_listing', 'List on the public recovery partners page', 'bool'),
+      f('trade_status', 'Trade account', 'select', { options: [['applied', 'Applied — awaiting review'], ['approved', 'Approved'], ['declined', 'Declined']], list: true, help: 'Approve applications from the dashboard to send the trade code automatically.' }),
+      f('trade_details', 'Trade application details', 'textarea'),
       f('notes', 'Collaboration notes', 'textarea'),
       active,
     ],
@@ -298,6 +302,47 @@ export const RESOURCES: Resource[] = [
   },
 
   // ── Marketing ──
+  {
+    key: 'pages', table: 'pages', pk: 'slug', pkType: 'text', title: 'Website pages', singular: 'page', group: 'Marketing',
+    blurb: 'Add your own pages — About us, Warranty, Careers, Price promise — and choose whether they appear in the menu or footer. A page called "privacy", "terms" or "cookies" replaces the built-in one.',
+    read: 'content.write', write: 'content.write', search: ['title', 'slug', 'body'], orderBy: 'sort, title',
+    fields: [
+      f('title', 'Page title', 'text', { required: true, list: true, help: 'Wrap a word in [brackets] to show it in the accent colour.' }),
+      f('slug', 'Web address', 'text', { required: true, list: true, lockOnEdit: true, help: 'The page lives at /this-name, e.g. about-us.', placeholder: 'about-us' }),
+      f('nav_label', 'Short menu label', 'text', { placeholder: 'About' }),
+      f('eyebrow', 'Small heading above the title', 'text', { placeholder: 'Our story' }),
+      f('intro', 'Introduction', 'textarea'),
+      f('image_media_id', 'Photo', 'media', { help: 'Shown beside the title and used when the page is shared.' }),
+      f('body', 'Page content', 'markdown', { help: 'Use ## for headings, - for bullet points, **bold** and [link text](https://…).' }),
+      f('cta_label', 'Button text', 'text', { placeholder: 'Book a visit' }),
+      f('cta_href', 'Button link', 'text', { placeholder: '/book' }),
+      f('seo_description', 'Google description', 'textarea', { help: 'One or two sentences shown in search results.' }),
+      f('show_in_menu', 'Show in the main menu', 'bool', { list: true }),
+      f('show_in_footer', 'Show in the footer', 'bool', { def: true, list: true }),
+      sort,
+      active,
+    ],
+  },
+  {
+    key: 'flyers', table: 'flyers', pk: 'slug', pkType: 'text', title: 'Flyer studio', singular: 'flyer', group: 'Marketing',
+    blurb: 'Shareable, printable flyers with a scan-to-book QR code. Each one has its own page at /flyer/your-slug and a PDF for printing; bookings made from it are counted.',
+    read: 'content.write', write: 'content.write', search: ['title', 'slug', 'headline'], orderBy: 'created_at DESC', filter: 'template',
+    fields: [
+      f('title', 'Name (for you)', 'text', { required: true, list: true, placeholder: 'Winter DPF leaflet drop' }),
+      f('slug', 'Web address', 'text', { required: true, list: true, lockOnEdit: true, help: 'Letters, numbers and dashes — the flyer lives at /flyer/this-name.', placeholder: 'winter-dpf' }),
+      f('template', 'Style', 'select', { required: true, list: true, def: 'diagnostics', options: [['diagnostics', 'Diagnostics & coding'], ['detailing', 'Detailing & ceramic'], ['emergency', 'Emergency call-out'], ['trade', 'Trade & fleet'], ['seasonal', 'Seasonal offer']] }),
+      f('headline', 'Headline', 'text', { required: true, placeholder: 'Dashboard lit up? We come to you.' }),
+      f('subhead', 'Sub-heading', 'textarea'),
+      f('points', 'Selling points (one per line)', 'list'),
+      f('package_slugs', 'Packages to feature', 'multiselect', { optionsFrom: 'packages', help: 'Shown with prices and a one-tap booking link.' }),
+      f('offer_text', 'Offer line', 'text', { placeholder: '10% off any diagnostic this month' }),
+      f('promo_code', 'Promo code applied when booking', 'text', { upper: true, help: 'Create the code under Promo codes first.' }),
+      f('cta_label', 'Button text', 'text', { def: 'Book now' }),
+      f('expires_on', 'Offer ends', 'date'),
+      f('views', 'Views', 'int', { list: true, help: 'Counted automatically.' }),
+      active,
+    ],
+  },
   {
     key: 'banners', table: 'banners', pk: 'id', pkType: 'int', title: 'Banners & seasonal promos', singular: 'banner', group: 'Marketing',
     blurb: 'Promo strips across the site. Seasonal banners switch on automatically in their months.',

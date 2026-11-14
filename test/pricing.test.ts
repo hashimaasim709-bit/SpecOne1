@@ -20,6 +20,7 @@ const config: QuoteConfig = {
     loyalty: { enabled: true, pointsPerPound: 1, pointValue: 5, minRedeem: 100, referrerPoints: 300 },
     labourRates: [],
     vat: { registered: false, rate: 20, number: '' },
+    tradeDiscountPct: 25,
   },
   peakRules: [{ id: 1, name: 'Sunday', weekdays: [0], slots: [], adjust_type: 'percent', value: 10 }],
 };

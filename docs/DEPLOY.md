@@ -90,8 +90,10 @@ are imported, you can delete the old Worker.
 ## Part B — Optional extras (any time later)
 
 ### Integrations
-Each one is added the same way as `SETUP_TOKEN` in step 6 (Worker → Settings → Variables and
-Secrets → Add → Secret). Until a key is added the site uses a sensible fallback and says so.
+**Easiest:** Admin → **Connections** — paste each key and press Test (see `docs/SETUP.md`).
+Alternatively add them the same way as `SETUP_TOKEN` in step 6 (Worker → Settings → Variables and
+Secrets → Add → Secret); a Cloudflare secret takes priority over a key saved in the admin.
+Until a key is added the site uses a sensible fallback and says so.
 
 | Secret(s) | Turns on | Where to get it |
 |---|---|---|

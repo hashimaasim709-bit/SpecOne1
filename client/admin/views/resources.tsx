@@ -1,5 +1,5 @@
 // Generic list + form for every admin-managed table (driven by shared/resources.ts).
-import type { InputHTMLAttributes } from 'preact';
+import type { ComponentChildren, InputHTMLAttributes } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { SLOT_ORDER, SLOTS } from '../../../shared/constants';
 import { formatDate, money } from '../../../shared/format';
@@ -8,7 +8,7 @@ import { compressImage } from '../../lib/api';
 import { debounce, toast } from '../../lib/ui';
 import { del, get, send, upload } from '../api';
 import { can, go, hashQuery, type Me } from '../main';
-import { Drawer, Empty, Icon, moneyInputValue, PageTitle, Stale, toMinor, useAction } from '../ui';
+import { Drawer, Empty, Icon, Modal, moneyInputValue, PageTitle, Stale, toMinor, useAction } from '../ui';
 
 type Row = Record<string, unknown>;
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -38,6 +38,7 @@ export function ResourceView({ resourceKey, me, openId }: { resourceKey: string;
   const [page, setPage] = useState(1);
   const [data, setData] = useState<{ data: { rows: Row[]; total: number }; stale: boolean; at: number } | null>(null);
   const [editing, setEditing] = useState<{ id: string | null; initial?: Row } | null>(openId ? { id: openId } : null);
+  const [importing, setImporting] = useState(false);
   const load = useMemo(() => debounce((term: string, flt: string, p: number) => {
     const params = new URLSearchParams({ page: String(p), size: '50' });
     if (term) params.set('q', term);
@@ -59,6 +60,7 @@ export function ResourceView({ resourceKey, me, openId }: { resourceKey: string;
       <PageTitle title={res.title} sub={res.blurb}>
         {writable && <button class="btn btn-primary" type="button" onClick={() => setEditing({ id: null })}><Icon name="plus" /> Add {res.singular}</button>}
         {resourceKey === 'customers' && <a class="btn" href="/api/admin/export/customers.csv"><Icon name="download" /> CSV</a>}
+        {resourceKey === 'dtc_codes' && writable && <button class="btn" type="button" onClick={() => setImporting(true)}><Icon name="download" /> Import list</button>}
         {resourceKey === 'expenses' && can(me, 'finance.read') && <a class="btn" href="/api/admin/export/expenses.csv"><Icon name="download" /> CSV</a>}
       </PageTitle>
       <div class="toolbar">
@@ -82,6 +84,7 @@ export function ResourceView({ resourceKey, me, openId }: { resourceKey: string;
         </div>
       )}
       {data && data.data.total > 50 && <div class="pager"><button class="btn btn-sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button><span>{data.data.total} total · page {page}</span><button class="btn btn-sm" disabled={page * 50 >= data.data.total} onClick={() => setPage(page + 1)}>Next</button></div>}
+      {importing && <DtcImport onClose={() => setImporting(false)} onDone={() => { setImporting(false); load(q, filter, page); }} />}
       {editing && <ResourceForm resourceKey={resourceKey} id={editing.id} initial={editing.initial} me={me} onClose={close} onSaved={() => { close(); load(q, filter, page); }} />}
     </div>
   );
@@ -190,7 +193,28 @@ function ExtraActions({ resourceKey, id, row }: { resourceKey: string; id: strin
   if (resourceKey === 'fleet_portals') return <a class="btn" href={`/fleet/${id}`} target="_blank" rel="noopener"><Icon name="external" /> Open portal</a>;
   if (resourceKey === 'towns') return <a class="btn" href={`/${id}`} target="_blank" rel="noopener"><Icon name="external" /> View page</a>;
   if (resourceKey === 'guides') return <a class="btn" href={`/guides/${id}`} target="_blank" rel="noopener"><Icon name="external" /> View guide</a>;
+  if (resourceKey === 'pages') return <a class="btn" href={`/${id}`} target="_blank" rel="noopener"><Icon name="external" /> View page</a>;
   if (resourceKey === 'packages' && row.slug) return <a class="btn" href={`/services/${row.slug}`} target="_blank" rel="noopener"><Icon name="external" /> View service page</a>;
+  if (resourceKey === 'flyers') {
+    const url = `${location.origin}/flyer/${id}`;
+    return (
+      <div class="row">
+        <a class="btn btn-primary" href={`/flyer/${id}`} target="_blank" rel="noopener"><Icon name="eye" /> Open flyer</a>
+        <a class="btn" href={`/flyer/${id}/pdf`} target="_blank" rel="noopener"><Icon name="download" /> Print PDF</a>
+        <button class="btn" type="button" onClick={async () => { try { if (navigator.share) await navigator.share({ title: String(row.title ?? 'Flyer'), url }); else { await navigator.clipboard.writeText(url); toast('Flyer link copied'); } } catch { /* closed */ } }}><Icon name="share" /> Share link</button>
+      </div>
+    );
+  }
+  if (resourceKey === 'partners') {
+    const months = Array.from({ length: 6 }, (_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); return d.toISOString().slice(0, 7); });
+    return (
+      <div class="stack" style="gap:8px">
+        <span class="label">Monthly statement</span>
+        <div class="chip-row">{months.map((m) => <a class="chip" href={`/api/admin/partners/${id}/statement.pdf?month=${m}`} target="_blank" rel="noopener"><Icon name="file" /> {new Date(`${m}-01T12:00:00Z`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</a>)}</div>
+        {row.trade_status === 'applied' && <span class="hint">This is a trade application — approve it from the dashboard to send the trade code.</span>}
+      </div>
+    );
+  }
   return null;
 }
 
@@ -227,6 +251,7 @@ function FieldInput({ f, value, onChange, disabled, error, resourceKey }: { f: F
     case 'list':
       return <div class="field">{label}<textarea class="textarea" id={id} value={((value as string[]) ?? []).join('\n')} disabled={disabled} onInput={(e) => onChange((e.target as HTMLTextAreaElement).value.split('\n'))} />{foot}</div>;
     case 'multiselect': case 'weekdays': case 'months': case 'slotset': {
+      if (f.optionsFrom) return <LiveMultiselect f={f} value={(value as string[]) ?? []} onChange={onChange} disabled={disabled} foot={foot} />;
       const opts: [string | number, string][] = f.type === 'weekdays' ? DAYS.map((d, i) => [i, d]) : f.type === 'months' ? MONTHS.map((m, i) => [i + 1, m]) : f.type === 'slotset' ? SLOT_ORDER.map((s) => [s, SLOTS[s].label]) : (f.options ?? []).map((o) => [optionValue(o), optionLabel(o)]);
       const cur = (value as (string | number)[]) ?? [];
       return <div class="field"><span class="label">{f.label}</span><div class="chip-row">{opts.map(([v, l]) => <button type="button" class="chip" disabled={disabled} aria-pressed={cur.includes(v)} onClick={() => onChange(cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v])}>{l}</button>)}</div>{foot}</div>;
@@ -271,6 +296,23 @@ function FieldInput({ f, value, onChange, disabled, error, resourceKey }: { f: F
   }
 }
 
+const liveOptions = new Map<string, Promise<[string, string][]>>();
+/** Chips whose options come from another resource (e.g. packages for a flyer), in display order. */
+function LiveMultiselect({ f, value, onChange, disabled, foot }: { f: Field; value: string[]; onChange: (v: unknown) => void; disabled: boolean; foot: ComponentChildren }) {
+  const [opts, setOpts] = useState<[string, string][] | null>(null);
+  useEffect(() => {
+    const key = f.optionsFrom!;
+    if (!liveOptions.has(key)) liveOptions.set(key, get<{ rows: Row[] }>(`/r/${key}?size=200`).then((r) => r.data.rows.map((x) => [String(x.slug), String(x.name)] as [string, string])).catch(() => []));
+    void liveOptions.get(key)!.then(setOpts);
+  }, [f.optionsFrom]);
+  return (
+    <div class="field"><span class="label">{f.label}</span>
+      {!opts ? <div class="skeleton" style="height:36px" /> : <div class="chip-row">{opts.map(([v, l]) => <button type="button" class="chip" disabled={disabled} aria-pressed={value.includes(v)} onClick={() => onChange(value.includes(v) ? value.filter((x) => x !== v) : [...value, v])}>{l}</button>)}</div>}
+      {foot}
+    </div>
+  );
+}
+
 function MediaField({ f, value, onChange, disabled, resourceKey }: { f: Field; value: number | null; onChange: (v: unknown) => void; disabled: boolean; resourceKey: string }) {
   const [preview, setPreview] = useState<{ url: string; contentType: string } | null>(null);
   const [busy, act] = useAction();
@@ -296,5 +338,27 @@ function MediaField({ f, value, onChange, disabled, resourceKey }: { f: Field; v
       </div>
       {f.help && <span class="hint">{f.help}</span>}
     </div>
+  );
+}
+
+/** Paste fault codes from a spreadsheet: code, title, system, causes, how we fix it, severity. */
+function DtcImport({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [text, setText] = useState('');
+  const [busy, act] = useAction();
+  const [result, setResult] = useState<{ added: number; updated: number; skipped: string[]; skippedCount: number } | null>(null);
+  return (
+    <Modal title="Import fault codes" onClose={onClose} wide>
+      <div class="stack" style="gap:10px">
+        <p class="muted" style="margin:0">Paste rows from Excel, Google Sheets or a CSV file — one code per line, in this column order:</p>
+        <code class="mono" style="display:block;padding:8px 10px;border-radius:8px;background:var(--surface-2);font-size:.8rem">code, title, system, likely causes, how we pinpoint it, severity (info / amber / red)</code>
+        <p class="faint" style="margin:0;font-size:.82rem">Only code and title are required. Existing codes are updated; blank columns keep what is already there.</p>
+        <textarea class="textarea mono" style="min-height:220px;font-size:.82rem" placeholder={'P0128, Coolant thermostat below regulating temperature, Cooling, Thermostat stuck open, Graph warm-up time, amber'} value={text} onInput={(e) => setText((e.target as HTMLTextAreaElement).value)} />
+        {result && <div class="alert alert-good"><Icon name="check" /><span>{result.added} added, {result.updated} updated{result.skippedCount ? `, ${result.skippedCount} skipped (not a valid code or missing a title${result.skipped.length ? `: ${result.skipped.slice(0, 3).join(' · ')}` : ''})` : ''}.</span></div>}
+        <div class="row">
+          <button class="btn btn-primary" type="button" disabled={busy || !text.trim()} onClick={async () => { const r = await act(() => send<{ added: number; updated: number; skipped: string[]; skippedCount: number }>('/dtc/import', { text })); if (r) { setResult(r); if (!r.skippedCount) setTimeout(onDone, 900); } }}>Import</button>
+          <button class="btn btn-ghost" type="button" onClick={result ? onDone : onClose}>{result ? 'Done' : 'Cancel'}</button>
+        </div>
+      </div>
+    </Modal>
   );
 }

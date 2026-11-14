@@ -9,11 +9,16 @@ and detailing laboratory — rebuilt from the ground up on Cloudflare Workers.
   smart upsells, promo/referral codes, deposits with Apple Pay / Google Pay.
 - **Live tracker** — the van on a map with ETA, job stages, invoice, report and feedback.
 - **Customer portal** — bookings, per-vehicle history, plans, loyalty points, referrals.
-- **Admin app** (installable, works offline) — dashboard and charts, job cards with
-  signatures, checklists, technical logs, dispatch, payments, CRM, reports and tax,
-  inventory, marketing content, team permissions, audit trail, backups.
+- **Admin app** (installable, works offline) — dashboard and charts, one-tap controls,
+  job cards with signatures, customer-approved estimates, checklists, technical logs,
+  dispatch, payments, CRM, reports and tax, inventory, team permissions, audit trail, backups.
+- **Marketing** — interactive price list and flyer studio (pages, QR codes and print PDFs),
+  trade portal with online applications and monthly statements, contact & help page.
+- **Website studio** — accent colour, theme, homepage sections and feature switches,
+  changed from the admin without touching code.
 
-See **[docs/FEATURES.md](docs/FEATURES.md)** for all 100 features and **[docs/DEPLOY.md](docs/DEPLOY.md)** to go live.
+See **[docs/FEATURES.md](docs/FEATURES.md)** for every feature, **[docs/DEPLOY.md](docs/DEPLOY.md)** to go live and
+**[docs/SETUP.md](docs/SETUP.md)** to switch on phone alerts, DVLA lookups, maps, email and payments from the admin.
 
 ## Quick start
 

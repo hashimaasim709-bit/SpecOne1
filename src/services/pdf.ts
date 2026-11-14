@@ -2,6 +2,7 @@
 // directly with pdf-lib so they render identically everywhere and need no headless browser.
 // Every page carries a vector header and footer; an uploaded logo replaces the S1 emblem.
 import { LineCapStyle, PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage, type RGB } from 'pdf-lib';
+import { qrMatrix } from '../lib/qr';
 
 const W = 595.28;
 const H = 841.89;
@@ -338,6 +339,17 @@ export class Doc {
     this.y = top - 92;
   }
 
+  /** Draw a QR code with its top-left corner at (x, top). */
+  qr(text: string, x: number, top: number, size: number): void {
+    const m = qrMatrix(text);
+    const n = m.length + 8;
+    const cell = size / n;
+    this.page.drawRectangle({ x, y: top - size, width: size, height: size, color: C.white, borderColor: C.line, borderWidth: 0.6 });
+    m.forEach((row, r) => row.forEach((dark, c) => {
+      if (dark) this.page.drawRectangle({ x: x + (c + 4) * cell, y: top - (r + 5) * cell, width: cell + 0.05, height: cell + 0.05, color: C.obsidian });
+    }));
+  }
+
   async finish(): Promise<Uint8Array> {
     const pages = this.pdf.getPages();
     pages.forEach((page, i) => {
@@ -576,5 +588,149 @@ export async function partsRequestPdf(d: PartsRequestData): Promise<Uint8Array> 
   }
   doc.gap(8);
   doc.para('Please confirm price, availability and delivery time before dispatch. Quote the reference above on all paperwork.', { size: 8, color: C.muted });
+  return doc.finish();
+}
+
+// ───────────────────────────── Marketing & trade documents ─────────────────────────────
+
+export interface RateCardData {
+  brand: PdfBrand;
+  title: string;
+  subtitle: string;
+  issued: string;
+  groups: { tag: string; title: string; note: string; sized: boolean; rows: string[][] }[];
+  notes: string[];
+  qrUrl: string;
+  qrLabel: string;
+}
+
+/** Printable price list: every package by division with S / M / L prices and a booking QR code. */
+export async function rateCardPdf(d: RateCardData): Promise<Uint8Array> {
+  const doc = await Doc.create(d.brand, d.title, [['Issued', d.issued]]);
+  const top = doc.y;
+  doc.qr(d.qrUrl, W - M - 92, top + 6, 92);
+  doc.draw(d.qrLabel.toUpperCase(), W - M - 46, top - 96, { size: 6.4, font: doc.monoBold, color: C.muted, align: 'center' });
+  doc.para(d.subtitle, { width: INNER - 120, size: 10.5, color: C.body });
+  doc.y = Math.min(doc.y, top - 112);
+  for (const g of d.groups) {
+    if (!g.rows.length) continue;
+    doc.heading(g.title, g.tag);
+    if (g.note) doc.para(g.note, { size: 8.4, color: C.muted });
+    doc.gap(2);
+    if (g.sized) {
+      doc.table([{ label: 'Package', width: 0.52 }, { label: 'Small', width: 0.16, align: 'right', mono: true }, { label: 'Medium', width: 0.16, align: 'right', mono: true }, { label: 'Large', width: 0.16, align: 'right', mono: true }], g.rows, { size: 8.6 });
+    } else {
+      doc.table([{ label: 'Package', width: 0.66 }, { label: 'Time', width: 0.16, align: 'right', mono: true }, { label: 'Price', width: 0.18, align: 'right', mono: true, bold: true }], g.rows, { size: 8.6 });
+    }
+  }
+  if (d.notes.length) {
+    doc.heading('Good to know', 'Terms');
+    for (const n of d.notes) doc.para(`- ${n}`, { size: 8.6 });
+  }
+  return doc.finish();
+}
+
+export interface FlyerData {
+  brand: PdfBrand;
+  eyebrow: string;
+  headline: string;
+  subhead: string;
+  points: string[];
+  offer: string;
+  promoCode: string;
+  expires: string;
+  packages: { name: string; price: string }[];
+  qrUrl: string;
+  cta: string;
+  contact: string[];
+}
+
+/** One-page printable flyer: headline, selling points, offer, prices and a scan-to-book QR code. */
+export async function flyerPdf(d: FlyerData): Promise<Uint8Array> {
+  const doc = await Doc.create(d.brand, 'Flyer', []);
+  const p = doc.page;
+  let y = doc.y + 4;
+  doc.draw(d.eyebrow.toUpperCase(), M, y, { size: 8, font: doc.monoBold, color: C.crimson });
+  y -= 30;
+  for (const line of doc.wrap(d.headline, 30, INNER, doc.bold).slice(0, 3)) {
+    doc.draw(line, M, y, { size: 30, font: doc.bold });
+    y -= 34;
+  }
+  y -= 2;
+  for (const line of doc.wrap(d.subhead, 12, INNER, doc.regular).slice(0, 4)) {
+    doc.draw(line, M, y, { size: 12, color: C.body });
+    y -= 17;
+  }
+  y -= 12;
+  // Selling points on the left, QR on the right.
+  const qrSize = 150;
+  const qrTop = y;
+  for (const pt of d.points.slice(0, 6)) {
+    p.drawCircle({ x: M + 6, y: y + 3.5, size: 6, color: C.crimson });
+    p.drawLine({ start: { x: M + 3.4, y: y + 3.6 }, end: { x: M + 5.4, y: y + 1.4 }, thickness: 1.3, color: C.white });
+    p.drawLine({ start: { x: M + 5.4, y: y + 1.4 }, end: { x: M + 9, y: y + 6 }, thickness: 1.3, color: C.white });
+    const lines = doc.wrap(pt, 11, INNER - qrSize - 50, doc.regular);
+    lines.forEach((l, i) => doc.draw(l, M + 20, y - i * 14, { size: 11, color: C.ink }));
+    y -= lines.length * 14 + 8;
+  }
+  doc.qr(d.qrUrl, W - M - qrSize, qrTop + 10, qrSize);
+  doc.draw('SCAN TO BOOK', W - M - qrSize / 2, qrTop - qrSize - 4, { size: 8, font: doc.monoBold, align: 'center' });
+  y = Math.min(y, qrTop - qrSize - 22);
+  if (d.offer || d.promoCode) {
+    const h = d.promoCode ? 64 : 44;
+    p.drawRectangle({ x: M, y: y - h + 12, width: INNER, height: h, color: C.obsidian });
+    p.drawRectangle({ x: M, y: y - h + 12, width: 5, height: h, color: C.crimson });
+    doc.draw(d.offer || 'Exclusive offer', M + 18, y - 8, { size: 15, font: doc.bold, color: C.white, maxWidth: INNER - 40 });
+    if (d.promoCode) {
+      doc.draw(`USE CODE  ${d.promoCode}${d.expires ? `   ·   ENDS ${d.expires.toUpperCase()}` : ''}`, M + 18, y - 30, { size: 10, font: doc.monoBold, color: rgb(1, 0.82, 0.86) });
+    }
+    y -= h + 10;
+  }
+  if (d.packages.length) {
+    y -= 6;
+    doc.y = y;
+    doc.table([{ label: 'Service', width: 0.72 }, { label: 'From', width: 0.28, align: 'right', mono: true, bold: true }], d.packages.slice(0, 8).map((x) => [x.name, x.price]), { size: 9.5 });
+    y = doc.y - 4;
+  }
+  y = Math.max(y, M + 110);
+  p.drawRectangle({ x: M, y: M + 40, width: INNER, height: 54, color: C.crimson });
+  doc.draw(d.cta.toUpperCase(), M + 18, M + 70, { size: 15, font: doc.bold, color: C.white, maxWidth: INNER - 36 });
+  doc.draw(d.contact.join('   ·   '), M + 18, M + 52, { size: 9, font: doc.mono, color: C.white, maxWidth: INNER - 36 });
+  return doc.finish();
+}
+
+export interface StatementData {
+  brand: PdfBrand;
+  ref: string;
+  period: string;
+  issued: string;
+  account: string[];
+  summary: [string, string][];
+  rows: string[][];
+  totals: { label: string; value: string; strong?: boolean; tone?: Tone }[];
+  terms: string;
+}
+
+/** Monthly trade / fleet statement: every job for the account in the period with paid and outstanding totals. */
+export async function statementPdf(d: StatementData): Promise<Uint8Array> {
+  const doc = await Doc.create(d.brand, 'Statement', [['Ref', d.ref], ['Period', d.period], ['Issued', d.issued]]);
+  const top = doc.y;
+  doc.draw('ACCOUNT', M, top, { size: 6.6, font: doc.mono, color: C.muted });
+  d.account.filter(Boolean).forEach((line, i) => doc.draw(line, M, top - 14 - i * 12.5, { size: i === 0 ? 11 : 9.5, font: i === 0 ? doc.bold : doc.regular, color: i === 0 ? C.ink : C.body, maxWidth: 300 }));
+  doc.y = top - 22 - Math.max(d.account.filter(Boolean).length, 2) * 12.5;
+  doc.kv(d.summary, 4);
+  doc.gap(2);
+  if (d.rows.length) {
+    doc.table(
+      [{ label: 'Date', width: 0.13, mono: true }, { label: 'Ref', width: 0.14, mono: true }, { label: 'Vehicle / work', width: 0.37 }, { label: 'Status', width: 0.12, tones: true }, { label: 'Total', width: 0.12, align: 'right', mono: true }, { label: 'Due', width: 0.12, align: 'right', mono: true, bold: true }],
+      d.rows, { size: 8.4 },
+    );
+  } else {
+    doc.para('No jobs in this period.', { color: C.muted });
+  }
+  doc.gap(6);
+  doc.totals(d.totals);
+  doc.gap(8);
+  doc.para(d.terms, { size: 7.6, color: C.muted });
   return doc.finish();
 }

@@ -138,3 +138,44 @@ named provider secret is set (see `DEPLOY.md`); until then a sensible fallback r
 | 98 | Parts ordering workflow | Built | Fault codes in findings → draft supplier list → email/WhatsApp + PDF, tracked to fitted |
 | 99 | Feedback sentiment analysis | Built · AI needs Anthropic key | Claude summarises reviews and chats; a built-in analyser runs without a key |
 | 100 | Source & data ownership | Built | `npm run export:source`, full JSON export, decryptable backups |
+
+## From the original site — rebuilt and extended
+
+Everything the previous site offered that wasn't in the list above, done properly.
+
+| Original feature | Now | Where / how |
+|---|---|---|
+| Rate card (`/flyer`) | Built | `/rate-card` — every package with S/M/L prices, add-ons, plans, savings and travel zones; scan-to-book QR, print-ready layout, Share button and a branded **PDF** (`/rate-card.pdf`). Old `/flyer` links redirect here |
+| Interactive flyers | Built | Admin → **Flyer studio**: pick a style (diagnostics, detailing, emergency, trade, seasonal), headline, selling points, featured packages, offer and promo code. Each flyer gets its own page `/flyer/name` with one-tap booking, a QR code, Share/Print, and a printable **PDF**. Views and bookings from each flyer are counted (Dashboard → Flyers & campaigns) |
+| Trade portal (`/trade`) + trade sign-up | Built | `/trade`: trade price list at your trade % (Settings → Pricing, default 25%), "book at trade rates" with a trade code, multi-vehicle visits, and an online **trade account application**. Applications appear on the dashboard — **Approve** sends the trade code by text/email and activates trade pricing |
+| B2B trade statement PDF | Built | Partner → **Monthly statement** for any of the last six months: every job, paid and outstanding |
+| Support / help page | Built | `/contact` (also `/support`, `/help`): topic-based message form with quick-start chips, optional reg plate and preferred reply method; call, WhatsApp, email and live chat tiles; opening times and quick-help links. Messages land in the admin inbox with a phone alert |
+| Estimate approval (`/approve`) | Built | Job card → Money → **Ask to approve extra work**: items and explanation are sent to the customer, who approves or declines on their tracker. Approved work is added to the invoice automatically and you get an alert |
+| 24 one-click admin macros | Built | Dashboard → **One-tap controls**: test phone alert, today's run sheet (share/copy for Samsung Notes or WhatsApp), block today / tomorrow / next Sunday, reopen all days, pause/resume online booking, confirm all pending, send tomorrow's reminders, 48-hour flash sale on/off, boost/standard bundle savings, share price list & trade portal, flyer studio, back up now, export bookings, archive old chats |
+| Phone push pings (ntfy) | Built · needs `NTFY_TOPIC` | Private topic set as a secret (the old hard-coded, guessable topic is gone) |
+| Calendar sync & .ics | Built | Settings → Booking rules → Phone calendar sync; per-booking "Add to calendar" on the tracker |
+
+## Website studio — change the site without code
+
+Admin → Settings → **Website studio** (owners and managers only):
+
+- **Accent colour** — SpecOne crimson, racing red, electric blue, workshop amber, emerald or ultra violet (contrast-checked on dark and light themes).
+- **Default theme** — dark or light; visitors can still switch.
+- **Hero panel** — live telemetry gauge, quick contact card, or text only; edit the headline and introduction.
+- **Homepage sections** — switch any section off or move it up and down.
+- **Feature switches** — emergency strip, WhatsApp button, phone action bar, install prompt, live chat, recent-booking pop-ups, seasonal banners, "Prices" and "Trade" in the menu.
+- **Pause online booking** — shows your message on every page and asks customers to call or WhatsApp; staff can still book.
+
+## Round 3 — fully managed from the admin
+
+| Feature | Where / how |
+|---|---|
+| **Connections centre** | Admin → Connections: every outside service with plain-English steps, a paste box, a **Test** button and live status. Keys are encrypted (AES-256-GCM, keyed from `SETUP_TOKEN`) and never shown again; Cloudflare secrets still take priority. One tap creates a private ntfy alert channel with a QR code to subscribe. See `docs/SETUP.md` |
+| **Website pages** | Admin → Website pages: About us, Warranty, Careers… with photo, rich text, button, Google description, menu/footer placement. Pages named `privacy`, `terms` or `cookies` replace the built-in ones |
+| **Homepage wording & images** | Website studio: every section heading and introduction, the four "how it works" steps, a homepage background photo and the social share image |
+| **Detailed maps** | MapTiler key in Connections → dark/light street maps with road names on the coverage map and live tracker (OpenStreetMap otherwise) |
+| **Fault-code library** | 145 codes built in (90 added), delivered to existing databases without touching edited codes; **Import list** pastes codes from Excel/Sheets/CSV |
+| **Self-service reschedule** | Tracker → Change date or time: open days and windows only, reminder moved, you get an alert |
+| **Free MOT reminders** | `/mot-reminder`: plate + contact → MOT date from the DVLA (or typed in) → reminder ~4 weeks before |
+| **Call-me-back** | Contact page: name, number and preferred time → priority phone alert |
+| **Trade area in My garage** | Approved trade customers see their trade code, discount, "Book at trade rates" and monthly statement PDFs |

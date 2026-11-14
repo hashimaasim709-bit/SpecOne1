@@ -113,3 +113,64 @@ export const SYMPTOM_CHIPS = [
   'Module replaced and needs coding',
   'Pre-purchase inspection',
 ];
+
+// ── Website studio (admin-controlled site layout and look) ──
+
+/** Homepage sections in their default order. The hero always stays first. */
+export const HOME_SECTIONS = [
+  ['hero', 'Hero & live telemetry'],
+  ['marquee', 'Credentials ticker'],
+  ['services', 'Featured services'],
+  ['stage', 'Interactive vehicle stage'],
+  ['how', 'How it works'],
+  ['results', 'Transformations gallery'],
+  ['coverage', 'Coverage map & postcode check'],
+  ['reviews', 'Reviews'],
+  ['lookup', 'Fault-code lookup'],
+  ['guides', 'Seasonal guides'],
+  ['trade', 'Fleet & trade'],
+  ['faq', 'FAQ'],
+  ['cta', 'Booking call-to-action'],
+] as const;
+export type HomeSection = (typeof HOME_SECTIONS)[number][0];
+
+/** Accent colour presets. Each passes contrast on both the dark and light themes. */
+export const ACCENTS = {
+  crimson: { label: 'SpecOne crimson', swatch: '#e11d48' },
+  racing: { label: 'Racing red', swatch: '#ef4444' },
+  electric: { label: 'Electric blue', swatch: '#2f7cf6' },
+  amber: { label: 'Workshop amber', swatch: '#f59e0b' },
+  emerald: { label: 'Emerald', swatch: '#10b981' },
+  violet: { label: 'Ultra violet', swatch: '#8b5cf6' },
+} as const;
+export type AccentKey = keyof typeof ACCENTS;
+
+/** Right-hand panel of the homepage hero. */
+export const HERO_PANELS = [
+  ['telemetry', 'Live lab telemetry (availability gauge)'],
+  ['contact', 'Quick contact card (call, WhatsApp, book)'],
+  ['none', 'No panel — text only'],
+] as const;
+
+export const FLYER_TEMPLATES = {
+  diagnostics: { label: 'Diagnostics & coding', eyebrow: 'Mobile diagnostics lab', icon: 'gauge' },
+  detailing: { label: 'Detailing & ceramic', eyebrow: 'Restorative detailing', icon: 'sparkle' },
+  emergency: { label: 'Emergency call-out', eyebrow: 'Breakdown & limp-mode rescue', icon: 'alert' },
+  trade: { label: 'Trade & fleet', eyebrow: 'Trade accounts', icon: 'building' },
+  seasonal: { label: 'Seasonal offer', eyebrow: 'Limited-time offer', icon: 'gift' },
+} as const;
+export type FlyerTemplate = keyof typeof FLYER_TEMPLATES;
+
+/** Topics on the contact & help form. */
+export const CONTACT_TOPICS = [
+  ['booking', 'A booking or availability question'],
+  ['quote', 'A quote for a fault or job'],
+  ['warning', 'A warning light or fault code'],
+  ['coding', 'Coding or feature activation'],
+  ['detailing', 'Detailing or ceramic'],
+  ['trade', 'Trade or fleet account'],
+  ['existing', 'An existing booking or report'],
+  ['feedback', 'Feedback or a complaint'],
+  ['other', 'Something else'],
+] as const;
+export type ContactTopic = (typeof CONTACT_TOPICS)[number][0];

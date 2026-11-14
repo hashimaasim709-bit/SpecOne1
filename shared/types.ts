@@ -54,6 +54,8 @@ export interface PricingSettings {
   loyalty: { enabled: boolean; pointsPerPound: number; pointValue: number; minRedeem: number; referrerPoints: number };
   labourRates: LabourRate[];
   vat: { registered: boolean; rate: number; number: string };
+  /** Trade-account discount applied to every package, in percent (shown on the trade portal). */
+  tradeDiscountPct: number;
 }
 
 export interface PromoInfo {
@@ -224,6 +226,8 @@ export interface TrackPayload {
   documents: { label: string; href: string }[];
   reviewUrl: string;
   business: { name: string; phone: string; whatsapp: string };
+  canReschedule: boolean;
+  estimates: { id: number; title: string; note: string; items: { name: string; qty: number; unitPrice: number }[]; total: number; status: 'pending' | 'approved' | 'declined'; decidedAt: string | null; createdAt: string }[];
 }
 
 export interface StaffUser {

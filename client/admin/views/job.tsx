@@ -361,6 +361,7 @@ function Money({ d, me, reload, addExpense }: { d: Detail; me: Me; reload: () =>
   return (
     <div class="cols-job">
       <div class="stack">
+        <EstimatesPanel bookingId={b.id} currency={cur} me={me} status={b.status} onChange={reload} />
         <div class="panel">
           <div class="panel-head"><h3>Invoice lines</h3><a class="btn btn-sm" href={`/docs/invoice/${b.id}.pdf`} target="_blank" rel="noopener"><Icon name="file" /> PDF</a></div>
           <div class="list">{d.items.map((i) => (
@@ -503,6 +504,68 @@ function PartsFromFindings({ bookingId, onDone }: { bookingId: number; onDone: (
           onDone();
         }
       }}>Create draft parts list</button>
+    </div>
+  );
+}
+
+interface Estimate { id: number; title: string; note: string; items: { name: string; qty: number; unitPrice: number }[]; total: number; status: string; createdBy: string; decidedName: string; decidedNote: string; decidedAt: string | null; createdAt: string }
+
+/** Extra work found on the job, sent to the customer's tracker to approve before it is done. */
+function EstimatesPanel({ bookingId, currency, me, status, onChange }: { bookingId: number; currency: string; me: Me; status: BookingStatus; onChange: () => void }) {
+  const [list, setList] = useState<Estimate[] | null>(null);
+  const [form, setForm] = useState<{ title: string; note: string; items: { name: string; qty: string; price: string }[] } | null>(null);
+  const [busy, act] = useAction();
+  const load = () => get<{ estimates: Estimate[] }>(`/bookings/${bookingId}/estimates`).then((r) => setList(r.data.estimates)).catch(() => setList([]));
+  useEffect(() => {
+    void load();
+  }, [bookingId]);
+  const write = can(me, 'bookings.write') && !['cancelled', 'no_show'].includes(status);
+  const total = form ? form.items.reduce((a, i) => a + Math.round((Number(i.qty) || 0) * toMinor(i.price)), 0) : 0;
+  return (
+    <div class="panel">
+      <div class="panel-head"><h3>Customer approvals</h3>{write && !form && <button class="btn btn-sm btn-primary" type="button" onClick={() => setForm({ title: '', note: '', items: [{ name: '', qty: '1', price: '' }] })}><Icon name="plus" /> Ask to approve extra work</button>}</div>
+      {form && (
+        <div class="stack" style="gap:10px;margin-bottom:12px">
+          <div class="field"><label>What did you find?</label><input class="input" placeholder="e.g. Corroded battery terminal and failing glow plug" value={form.title} onInput={(e) => setForm({ ...form, title: (e.target as HTMLInputElement).value })} /></div>
+          <div class="field"><label>Explanation for the customer</label><textarea class="textarea" placeholder="What it means, why it matters, what happens if left…" value={form.note} onInput={(e) => setForm({ ...form, note: (e.target as HTMLTextAreaElement).value })} /></div>
+          <div class="rows-editor">
+            <div class="r faint" style="grid-template-columns:3fr 1fr 1.2fr 36px;font-size:.72rem"><span>Item</span><span>Qty</span><span>Price each (£)</span><span /></div>
+            {form.items.map((it, i) => (
+              <div class="r" style="grid-template-columns:3fr 1fr 1.2fr 36px">
+                <input class="input" value={it.name} placeholder="Part or labour" onInput={(e) => setForm({ ...form, items: form.items.map((x, j) => (j === i ? { ...x, name: (e.target as HTMLInputElement).value } : x)) })} />
+                <input class="input mono" inputMode="decimal" value={it.qty} onInput={(e) => setForm({ ...form, items: form.items.map((x, j) => (j === i ? { ...x, qty: (e.target as HTMLInputElement).value } : x)) })} />
+                <input class="input mono" inputMode="decimal" value={it.price} placeholder="0.00" onInput={(e) => setForm({ ...form, items: form.items.map((x, j) => (j === i ? { ...x, price: (e.target as HTMLInputElement).value } : x)) })} />
+                <button class="btn btn-icon btn-ghost btn-sm" type="button" aria-label="Remove item" disabled={form.items.length === 1} onClick={() => setForm({ ...form, items: form.items.filter((_, j) => j !== i) })}><Icon name="x" /></button>
+              </div>
+            ))}
+            <button class="btn btn-sm btn-ghost" style="justify-self:start" type="button" onClick={() => setForm({ ...form, items: [...form.items, { name: '', qty: '1', price: '' }] })}><Icon name="plus" /> Add item</button>
+          </div>
+          <div class="spread"><span class="muted">Total for approval</span><b class="mono">{money(total, currency)}</b></div>
+          <div class="row">
+            <button class="btn btn-primary" type="button" disabled={busy || !form.title.trim() || !form.items.some((i) => i.name.trim())} onClick={async () => {
+              const items = form.items.filter((i) => i.name.trim()).map((i) => ({ name: i.name.trim(), qty: Number(i.qty) || 1, unitPrice: toMinor(i.price) }));
+              const r = await act(() => send(`/bookings/${bookingId}/estimates`, { title: form.title.trim(), note: form.note.trim(), items, notify: true }), 'Sent to the customer for approval');
+              if (r) {
+                setForm(null);
+                void load();
+                onChange();
+              }
+            }}>Send for approval</button>
+            <button class="btn btn-ghost" type="button" onClick={() => setForm(null)}>Cancel</button>
+          </div>
+          <p class="faint" style="margin:0;font-size:.8rem">The customer gets a text/email with a link to approve or decline on their tracker. Approved items are added to the invoice automatically.</p>
+        </div>
+      )}
+      {!list ? <div class="skeleton" style="height:40px" /> : list.length === 0 && !form ? <p class="faint" style="margin:0">Found extra work? Send it here for the customer to approve before you carry on.</p> : (
+        <div class="list">{list.map((e) => (
+          <div class="list-row">
+            <span class="grow"><b>{e.title}</b><span>{e.status === 'pending' ? `Sent ${formatDateTime(e.createdAt)} by ${e.createdBy}` : e.status === 'withdrawn' ? 'Withdrawn' : `${e.status === 'approved' ? 'Approved' : 'Declined'} by ${e.decidedName || 'customer'}${e.decidedAt ? ` · ${formatDateTime(e.decidedAt)}` : ''}${e.decidedNote ? ` — "${e.decidedNote}"` : ''}`}</span></span>
+            <span class="mono">{money(e.total, currency)}</span>
+            <span class={`badge badge-${e.status === 'approved' ? 'good' : e.status === 'declined' ? 'bad' : e.status === 'pending' ? 'warn' : ''}`}>{e.status}</span>
+            {e.status === 'pending' && write && <button class="btn btn-sm btn-ghost" type="button" disabled={busy} onClick={async () => { if (await act(() => send(`/estimates/${e.id}/withdraw`, {}), 'Estimate withdrawn')) void load(); }}>Withdraw</button>}
+          </div>
+        ))}</div>
+      )}
     </div>
   );
 }

@@ -17,6 +17,7 @@ interface Me {
   loyalty: { enabled: boolean; pointValue: number; minRedeem: number; referrerPoints: number; referrals: number };
   currency: string;
   shareUrl: string;
+  trade: { id: number; name: string; code: string; discount: number; months: { month: string; jobs: number; total: number }[] } | null;
 }
 
 function SignIn({ onDone }: { onDone: () => void }) {
@@ -119,6 +120,22 @@ function Portal({ me, reload }: { me: Me; reload: () => void }) {
         <div><span class="eyebrow">My garage</span><h1 class="display" style="font-size:clamp(2.2rem,6vw,3.4rem)">Hi, {me.profile.name.split(' ')[0]}</h1></div>
         <div class="row"><a class="btn btn-primary" href="/book">Book again</a><button type="button" class="btn btn-ghost" onClick={async () => { await api('/api/account/logout', { method: 'POST' }); location.reload(); }}>Sign out</button></div>
       </div>
+
+      {me.trade && (
+        <div class="card trade-card stack" style="gap:12px">
+          <div class="spread"><div><span class="eyebrow" style="margin:0">Trade account</span><h2 class="h3" style="margin:4px 0 0">{me.trade.name}</h2></div><span class="badge badge-good">{me.trade.discount}% trade rate</span></div>
+          <div class="row" style="align-items:center">
+            <span class="mono trade-code">{me.trade.code}</span>
+            <button type="button" class="btn btn-sm" onClick={async () => { try { await navigator.clipboard.writeText(me.trade!.code); toast('Trade code copied'); } catch { /* ignore */ } }}>Copy code</button>
+            <a class="btn btn-sm btn-primary" href={`/book?promo=${encodeURIComponent(me.trade.code)}&src=trade`}>Book at trade rates</a>
+          </div>
+          <div>
+            <span class="mono faint" style="font-size:.7rem;letter-spacing:.14em">MONTHLY STATEMENTS</span>
+            {me.trade.months.length ? <div class="chip-row" style="margin-top:8px">{me.trade.months.map((m) => <a class="chip" href={`/api/account/trade/statement.pdf?month=${m.month}`} target="_blank" rel="noopener">{new Date(`${m.month}-01T12:00:00Z`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' })} · {m.jobs} job{m.jobs === 1 ? '' : 's'} · {money(m.total, cur)}</a>)}</div>
+              : <p class="muted" style="margin:6px 0 0">Your statements appear here after your first trade booking.</p>}
+          </div>
+        </div>
+      )}
 
       <div class="grid grid-3">
         <div class="card card-glass stack" style="gap:6px"><span class="mono faint" style="font-size:.7rem;letter-spacing:.14em">LOYALTY POINTS</span><b class="mono" style="font-size:2.2rem">{me.profile.loyalty_points}</b><span class="muted" style="font-size:.88rem">Worth {money(pointsValue, cur)}{me.profile.loyalty_points < me.loyalty.minRedeem ? ` · redeem from ${me.loyalty.minRedeem} points` : ' · use them at checkout'}</span></div>
