@@ -204,15 +204,13 @@ opsRoutes.post('/trade/:id/:decision{approve|decline}', async (c) => {
   return c.json({ ok: true, message: `${p!.name} declined. No message was sent — contact them if you want to explain.` });
 });
 
-/** Monthly statement for a trade / partner account. */
-opsRoutes.get('/partners/:id/statement.pdf', async (c) => {
-  staffOrFail(c, 'finance.read');
-  const id = intParam(c, 'id');
+/** Monthly statement PDF for a trade / partner account (shared by the admin and the customer portal). */
+export async function buildStatement(c: Ctx, id: number, monthRaw: string | undefined): Promise<{ bytes: Uint8Array; filename: string }> {
   const db = c.env.DB;
   const settings = await getSettings(db);
-  const month = /^\d{4}-\d{2}$/.test(c.req.query('month') ?? '') ? c.req.query('month')! : todayIn(settings.business.timezone).slice(0, 7);
+  const month = /^\d{4}-\d{2}$/.test(monthRaw ?? '') ? monthRaw! : todayIn(settings.business.timezone).slice(0, 7);
   const p = await first<{ id: number; name: string; contact_name: string; email: string; phone: string; code: string; customer_discount_pct: number }>(db, 'SELECT * FROM partners WHERE id = ?', id);
-  if (!p) fail(404, 'Partner not found.');
+  if (!p) fail(404, 'Account not found.');
   const rows = await all<{ date: string; ref: string; status: string; total: number; paid_amount: number; vehicles: string | null; items: string | null }>(
     db,
     `SELECT b.date, b.ref, b.status, b.total, b.paid_amount,
@@ -233,7 +231,13 @@ opsRoutes.get('/partners/:id/statement.pdf', async (c) => {
     totals: [{ label: 'Billed this period', value: money(billed) }, { label: 'Paid', value: money(paid), tone: 'good' }, { label: 'Balance due', value: money(billed - paid), strong: true }],
     terms: `Payment due within 14 days of the statement date. Pay by bank transfer quoting ${p!.code}-${month}, or by card through the tracker link for each job. Questions: ${settings.business.phone} · ${settings.business.email}.`,
   });
-  return download(bytes as Uint8Array<ArrayBuffer>, `statement-${p!.code}-${month}.pdf`, 'application/pdf', c.req.query('download') !== '1');
+  return { bytes, filename: `statement-${p!.code}-${month}.pdf` };
+}
+
+opsRoutes.get('/partners/:id/statement.pdf', async (c) => {
+  staffOrFail(c, 'finance.read');
+  const { bytes, filename } = await buildStatement(c, intParam(c, 'id'), c.req.query('month'));
+  return download(bytes as Uint8Array<ArrayBuffer>, filename, 'application/pdf', c.req.query('download') !== '1');
 });
 
 // ───────────────────────────── Estimates (extra work for customer approval) ─────────────────────────────
@@ -312,3 +316,58 @@ export async function decideEstimate(c: Ctx, bookingId: number, estimateId: numb
   c.executionCtx.waitUntil(pushOwner(c.env, `Estimate ${status}: ${b!.ref}`, `${name || 'The customer'} ${status} "${e!.title}" (${money(e!.total)}).${note ? ` Note: ${note.slice(0, 200)}` : ''}`, `${originOf(c)}/admin#/bookings/${bookingId}`, decision === 'approve' ? 4 : 3, [decision === 'approve' ? 'white_check_mark' : 'x']));
   return { total };
 }
+
+// ───────────────────────────── Fault-code bulk import ─────────────────────────────
+/** Split one CSV / tab-separated line, honouring double-quoted fields. */
+export function splitRow(line: string): string[] {
+  const sep = line.includes('\t') ? '\t' : ',';
+  const out: string[] = [];
+  let cur = '';
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]!;
+    if (quoted) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; } else if (ch === '"') quoted = false; else cur += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === sep) { out.push(cur.trim()); cur = ''; } else cur += ch;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+opsRoutes.post('/dtc/import', async (c) => {
+  staffOrFail(c, 'tech.write');
+  const { text } = await readJson(c, z.object({ text: z.string().max(400_000) }));
+  const db = c.env.DB;
+  let added = 0;
+  let updated = 0;
+  const skipped: string[] = [];
+  const statements: D1PreparedStatement[] = [];
+  const existing = new Set((await all<{ code: string }>(db, 'SELECT code FROM dtc_codes')).map((r) => r.code));
+  for (const raw of text.split(/\r?\n/)) {
+    if (!raw.trim()) continue;
+    const [code = '', title = '', system = '', causes = '', fixes = '', severity = ''] = splitRow(raw);
+    const c0 = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!/^[PCBU][0-9A-F]{4}$/.test(c0)) {
+      if (!/^code$/i.test(code)) skipped.push(raw.slice(0, 40));
+      continue;
+    }
+    if (!title) {
+      skipped.push(raw.slice(0, 40));
+      continue;
+    }
+    const sev = ['info', 'amber', 'red'].includes(severity.toLowerCase()) ? severity.toLowerCase() : 'amber';
+    const sys = system || ({ P: 'Powertrain', C: 'Chassis', B: 'Body', U: 'Network' } as Record<string, string>)[c0[0]!]!;
+    statements.push(db.prepare(`INSERT INTO dtc_codes (code, system, title, causes, fixes, severity) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(code) DO UPDATE SET title = excluded.title, system = COALESCE(NULLIF(?, ''), dtc_codes.system), causes = COALESCE(NULLIF(excluded.causes, ''), dtc_codes.causes), fixes = COALESCE(NULLIF(excluded.fixes, ''), dtc_codes.fixes), severity = CASE WHEN ? = '' THEN dtc_codes.severity ELSE excluded.severity END`)
+      .bind(c0, sys.slice(0, 60), title.slice(0, 200), causes.slice(0, 1000), fixes.slice(0, 1000), sev, system, severity));
+    if (existing.has(c0)) updated++;
+    else {
+      added++;
+      existing.add(c0);
+    }
+  }
+  for (let i = 0; i < statements.length; i += 50) await db.batch(statements.slice(i, i + 50));
+  await audit(c, 'import', 'dtc_codes', 'bulk', `Imported fault codes: ${added} added, ${updated} updated`);
+  return c.json({ ok: true, added, updated, skipped: skipped.slice(0, 20), skippedCount: skipped.length });
+});

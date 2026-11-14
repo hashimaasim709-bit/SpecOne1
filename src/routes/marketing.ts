@@ -80,9 +80,17 @@ marketingRoutes.get('/contact', async (c) => {
   </form>
   <aside class="stack">
     ${contactActions(shell, { chat: true })}
+    <form class="card stack callback-card" data-enquiry-form data-kind="callback" data-success="Thanks — we'll call you back. If it's urgent, call us now.">
+      <h3 style="margin:0">${icon('phone')} Prefer a call back?</h3>
+      <div class="form-grid"><div class="field"><label for="cb-name">Name</label><input class="input" id="cb-name" name="name" required minlength="2" maxlength="80" autocomplete="name"></div><div class="field"><label for="cb-phone">Number</label><input class="input" id="cb-phone" name="phone" type="tel" required maxlength="24" autocomplete="tel"></div></div>
+      <div class="field"><label for="cb-when">When suits you?</label><select class="select" id="cb-when" name="when"><option value="asap">As soon as possible</option><option value="morning">Morning</option><option value="afternoon">Afternoon</option><option value="evening">Evening</option></select></div>
+      <div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
+      <button class="btn btn-primary" type="submit">Call me back</button>
+      <div data-form-result aria-live="polite"></div>
+    </form>
     <div class="card stack" style="gap:10px"><h3 style="margin:0">${icon('clock')} Opening times</h3>${b.hours.map((h) => html`<div class="spread"><span>${h.days}</span><span class="mono">${h.open}–${h.close}</span></div>`)}<p class="faint" style="margin:0;font-size:.82rem">Emergency call-outs outside these times by phone, subject to availability.</p></div>
     <div class="card stack" style="gap:6px"><h3 style="margin:0 0 4px">${icon('help')} Quick help</h3>
-      ${([['/account', 'Track a booking or download a report'], ['/fault-codes', 'Look up a fault code'], ['/coverage', 'Check if we cover your postcode'], ['/rate-card', 'See every price'], ['/emergency', 'Emergency call-out'], ['/faq', 'Frequently asked questions'], ['/trade', 'Trade & fleet accounts']] as [string, string][]).map(([href, label]) => html`<a class="link-row" href="${href}">${label}${icon('arrow')}</a>`)}
+      ${([['/account', 'Track a booking or download a report'], ['/mot-reminder', 'Get a free MOT reminder'], ['/fault-codes', 'Look up a fault code'], ['/coverage', 'Check if we cover your postcode'], ['/rate-card', 'See every price'], ['/emergency', 'Emergency call-out'], ['/faq', 'Frequently asked questions'], ['/trade', 'Trade & fleet accounts']] as [string, string][]).map(([href, label]) => html`<a class="link-row" href="${href}">${label}${icon('arrow')}</a>`)}
     </div>
   </aside>
 </div></section>`,
@@ -307,4 +315,36 @@ marketingRoutes.get('/flyer/:slug{[a-z0-9-]{2,60}}/pdf', async (c) => {
     contact: [s.business.phone, new URL(shell.origin).host, s.business.email].filter(Boolean),
   });
   return download(bytes as Uint8Array<ArrayBuffer>, `${f.slug}.pdf`, 'application/pdf', c.req.query('download') !== '1');
+});
+
+// ───────────────────────────── Free MOT reminders ─────────────────────────────
+marketingRoutes.get('/mot-reminder', async (c) => {
+  const shell = await loadShell(c);
+  const s = shell.settings;
+  const bc = crumbs(shell, [['/mot-reminder', 'Free MOT reminder']]);
+  return c.html(renderPage(c, shell, {
+    title: 'Free MOT Reminder', description: `Never miss an MOT: enter your number plate and ${s.business.name} will text or email you before it is due. Free, no obligation.`, path: '/mot-reminder', jsonLd: [bc.ld],
+    body: html`<section class="page-head grid-bg"><div class="wrap">${bc.html}<span class="eyebrow">Free reminder</span><h1 class="display">Never miss<br><span class="accent">an MOT again.</span></h1><p class="lead">Enter your number plate and we'll send a reminder about four weeks before your MOT is due — with a quick pre-MOT check if you want one. Free, and you can stop any time.</p></div></section>
+<section class="section-tight"><div class="wrap grid grid-2" style="align-items:start">
+  <form class="card stack" data-enquiry-form data-endpoint="/api/public/mot-reminder" data-success="Done — your reminder is set.">
+    <div class="field"><label for="m-reg">Number plate</label><input class="input plate-input mono" id="m-reg" name="reg" required maxlength="10" autocomplete="off" placeholder="AB12 CDE" style="text-transform:uppercase;font-size:1.4rem;text-align:center"></div>
+    <div class="field"><label for="m-name">Your name</label><input class="input" id="m-name" name="name" required minlength="2" maxlength="80" autocomplete="name"></div>
+    <div class="form-grid"><div class="field"><label for="m-phone">Mobile</label><input class="input" id="m-phone" name="phone" type="tel" maxlength="24" autocomplete="tel"></div><div class="field"><label for="m-email">Email</label><input class="input" id="m-email" name="email" type="email" maxlength="120" autocomplete="email"></div></div>
+    <div class="field"><label for="m-due">MOT due date <span class="faint">(only if we can't find it)</span></label><input class="input" id="m-due" name="motDue" type="date"><span class="hint">We look it up from the DVLA automatically where we can.</span></div>
+    <label class="check"><input type="checkbox" name="consent" required><span>Send me MOT and service reminders. I can stop them at any time.</span></label>
+    <div class="hp" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
+    <div data-turnstile></div>
+    <button class="btn btn-primary btn-lg" type="submit">Set my reminder</button>
+    <div data-form-result aria-live="polite"></div>
+  </form>
+  <div class="stack">
+    <div class="steps" style="grid-template-columns:1fr">
+      <div class="step"><h3>We check the date</h3><p>Your MOT expiry comes straight from the DVLA record for your plate.</p></div>
+      <div class="step"><h3>We remind you</h3><p>About four weeks before it's due, by text or email — no spam in between.</p></div>
+      <div class="step"><h3>Pass first time</h3><p>Book a pre-MOT health scan and we'll find warning lights, battery and emissions issues before the tester does.</p></div>
+    </div>
+    <a class="btn" style="align-self:flex-start" href="/services/pre-mot-health-scan">Pre-MOT health scan ${icon('arrow')}</a>
+  </div>
+</div></section>`,
+  }));
 });

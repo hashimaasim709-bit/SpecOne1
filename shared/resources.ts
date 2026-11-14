@@ -303,6 +303,27 @@ export const RESOURCES: Resource[] = [
 
   // ── Marketing ──
   {
+    key: 'pages', table: 'pages', pk: 'slug', pkType: 'text', title: 'Website pages', singular: 'page', group: 'Marketing',
+    blurb: 'Add your own pages — About us, Warranty, Careers, Price promise — and choose whether they appear in the menu or footer. A page called "privacy", "terms" or "cookies" replaces the built-in one.',
+    read: 'content.write', write: 'content.write', search: ['title', 'slug', 'body'], orderBy: 'sort, title',
+    fields: [
+      f('title', 'Page title', 'text', { required: true, list: true, help: 'Wrap a word in [brackets] to show it in the accent colour.' }),
+      f('slug', 'Web address', 'text', { required: true, list: true, lockOnEdit: true, help: 'The page lives at /this-name, e.g. about-us.', placeholder: 'about-us' }),
+      f('nav_label', 'Short menu label', 'text', { placeholder: 'About' }),
+      f('eyebrow', 'Small heading above the title', 'text', { placeholder: 'Our story' }),
+      f('intro', 'Introduction', 'textarea'),
+      f('image_media_id', 'Photo', 'media', { help: 'Shown beside the title and used when the page is shared.' }),
+      f('body', 'Page content', 'markdown', { help: 'Use ## for headings, - for bullet points, **bold** and [link text](https://…).' }),
+      f('cta_label', 'Button text', 'text', { placeholder: 'Book a visit' }),
+      f('cta_href', 'Button link', 'text', { placeholder: '/book' }),
+      f('seo_description', 'Google description', 'textarea', { help: 'One or two sentences shown in search results.' }),
+      f('show_in_menu', 'Show in the main menu', 'bool', { list: true }),
+      f('show_in_footer', 'Show in the footer', 'bool', { def: true, list: true }),
+      sort,
+      active,
+    ],
+  },
+  {
     key: 'flyers', table: 'flyers', pk: 'slug', pkType: 'text', title: 'Flyer studio', singular: 'flyer', group: 'Marketing',
     blurb: 'Shareable, printable flyers with a scan-to-book QR code. Each one has its own page at /flyer/your-slug and a PDF for printing; bookings made from it are counted.',
     read: 'content.write', write: 'content.write', search: ['title', 'slug', 'headline'], orderBy: 'created_at DESC', filter: 'template',

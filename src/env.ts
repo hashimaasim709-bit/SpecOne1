@@ -35,6 +35,8 @@ export interface Env {
   GETADDRESS_API_KEY?: string;
   IDEAL_POSTCODES_API_KEY?: string;
   GOOGLE_PLACES_API_KEY?: string;
+  /** MapTiler key for detailed map tiles (public — restrict it to your domain in MapTiler). */
+  MAPTILER_KEY?: string;
   // Bot protection (Cloudflare Turnstile)
   TURNSTILE_SITE_KEY?: string;
   TURNSTILE_SECRET_KEY?: string;

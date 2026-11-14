@@ -17,7 +17,8 @@ and detailing laboratory — rebuilt from the ground up on Cloudflare Workers.
 - **Website studio** — accent colour, theme, homepage sections and feature switches,
   changed from the admin without touching code.
 
-See **[docs/FEATURES.md](docs/FEATURES.md)** for all 100 features and **[docs/DEPLOY.md](docs/DEPLOY.md)** to go live.
+See **[docs/FEATURES.md](docs/FEATURES.md)** for every feature, **[docs/DEPLOY.md](docs/DEPLOY.md)** to go live and
+**[docs/SETUP.md](docs/SETUP.md)** to switch on phone alerts, DVLA lookups, maps, email and payments from the admin.
 
 ## Quick start
 

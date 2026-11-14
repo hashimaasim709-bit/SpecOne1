@@ -32,6 +32,11 @@ export interface Shell {
   logoUrl: string;
   banners: Banner[];
   towns: { slug: string; name: string }[];
+  /** Custom pages placed in the menu or footer from the admin. */
+  pages: { slug: string; label: string; menu: boolean; footer: boolean }[];
+  /** Absolute URL of the uploaded social share image, if any. */
+  shareImage: string;
+  heroImage: string;
   origin: string;
 }
 
@@ -51,12 +56,22 @@ export function activeBanners(rows: Banner[], today: string, seasonal: boolean):
 export async function loadShell(c: Ctx): Promise<Shell> {
   const db = c.env.DB;
   const settings = await getSettings(db);
-  const [bannerRows, towns, logo] = await Promise.all([
+  const mediaKey = (id: number | null) => (id ? first<{ storage_key: string }>(db, "SELECT storage_key FROM media WHERE id = ? AND visibility = 'public'", id) : Promise.resolve(null));
+  const [bannerRows, towns, logo, pageRows, share, hero] = await Promise.all([
     all<Banner>(db, 'SELECT * FROM banners WHERE active = 1 ORDER BY sort, id'),
     all<{ slug: string; name: string }>(db, 'SELECT slug, name FROM towns WHERE active = 1 ORDER BY sort, name'),
     settings.branding.logoMediaId ? first<{ storage_key: string }>(db, 'SELECT storage_key FROM media WHERE id = ?', settings.branding.logoMediaId) : null,
+    all<{ slug: string; title: string; nav_label: string; show_in_menu: number; show_in_footer: number }>(db, 'SELECT slug, title, nav_label, show_in_menu, show_in_footer FROM pages WHERE active = 1 AND (show_in_menu = 1 OR show_in_footer = 1) ORDER BY sort, title').catch(() => []),
+    mediaKey(settings.site.shareImageMediaId),
+    mediaKey(settings.site.heroImageMediaId),
   ]);
-  return { settings, logoUrl: logo ? mediaUrl(logo.storage_key) : '', banners: activeBanners(bannerRows, todayIn(settings.business.timezone), settings.integrations.seasonalBanners), towns, origin: originOf(c) };
+  const origin = originOf(c);
+  return {
+    settings, logoUrl: logo ? mediaUrl(logo.storage_key) : '', banners: activeBanners(bannerRows, todayIn(settings.business.timezone), settings.integrations.seasonalBanners), towns, origin,
+    pages: pageRows.map((p) => ({ slug: p.slug, label: p.nav_label || p.title, menu: !!p.show_in_menu, footer: !!p.show_in_footer })),
+    shareImage: share ? `${origin}${mediaUrl(share.storage_key)}` : '',
+    heroImage: hero ? mediaUrl(hero.storage_key) : '',
+  };
 }
 
 export interface PageOptions {
@@ -126,7 +141,7 @@ export function renderPage(c: Ctx, shell: Shell, o: PageOptions): string {
   const title = o.title.includes(b.name) ? o.title : `${o.title} · ${b.name}`;
   const wa = normPhone(b.whatsapp).replace('+', '');
   const f = s.site.features;
-  const NAV = navItems(s);
+  const NAV = [...navItems(s), ...shell.pages.filter((p) => p.menu).slice(0, 2).map((p) => [`/${p.slug}`, p.label] as [string, string])];
   const emergency = o.hideBanners || !f.emergencyStrip ? null : shell.banners.find((x) => x.kind === 'emergency');
   const promo = o.hideBanners ? null : shell.banners.find((x) => x.kind === 'seasonal') ?? shell.banners.find((x) => x.kind === 'promo' || x.kind === 'notice');
   const mobileBar = o.mobileBar !== false && f.mobileBar;
@@ -142,6 +157,7 @@ export function renderPage(c: Ctx, shell: Shell, o: PageOptions): string {
     business: b.name,
     turnstile: c.env.TURNSTILE_SITE_KEY ?? '',
     installPrompt: f.installPrompt,
+    mapKey: c.env.MAPTILER_KEY ?? '',
     ...(o.data ?? {}),
   };
   const ld = [localBusinessLd(shell), ...(o.jsonLd ?? [])];
@@ -161,7 +177,7 @@ ${o.noindex ? raw('<meta name="robots" content="noindex">') : ''}
 <meta property="og:title" content="${title}">
 <meta property="og:description" content="${o.description}">
 <meta property="og:url" content="${canonical}">
-<meta property="og:image" content="${o.image ?? `${shell.origin}/icons/og-image.png`}">
+<meta property="og:image" content="${o.image ?? (shell.shareImage || `${shell.origin}/icons/og-image.png`)}">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -196,7 +212,7 @@ ${promo ? html`<div class="strip strip-promo" data-banner="${promo.id}" hidden><
   <div class="sheet-backdrop" data-menu-close></div>
   <div class="sheet-panel" role="dialog" aria-label="Menu">
     <div class="spread" style="margin-bottom:10px">${brandMark(shell)}<button class="btn btn-ghost btn-icon" type="button" data-menu-close aria-label="Close menu">${icon('x')}</button></div>
-    ${[['/book', 'Book a visit'], ...NAV.filter(([href]) => href !== '/contact'), ['/gallery', 'Lab gallery'], ['/emergency', 'Emergency call-out'], ...(f.tradeInNav ? [] : [['/trade', 'Trade portal']]), ...(f.rateCardInNav ? [] : [['/rate-card', 'Price list']]), ['/reviews', 'Reviews'], ['/guides', 'Guides'], ['/faq', 'FAQ'], ['/contact', 'Contact & help'], ['/account', 'My garage']].map(([href, label]) => html`<a class="sheet-link" href="${href}">${label}${icon('arrow')}</a>`)}
+    ${[['/book', 'Book a visit'], ...NAV.filter(([href]) => href !== '/contact'), ['/gallery', 'Lab gallery'], ['/emergency', 'Emergency call-out'], ['/mot-reminder', 'Free MOT reminder'], ...(f.tradeInNav ? [] : [['/trade', 'Trade portal']]), ...(f.rateCardInNav ? [] : [['/rate-card', 'Price list']]), ['/reviews', 'Reviews'], ['/guides', 'Guides'], ['/faq', 'FAQ'], ...shell.pages.filter((p) => p.menu).slice(2).map((p) => [`/${p.slug}`, p.label]), ['/contact', 'Contact & help'], ['/account', 'My garage']].map(([href, label]) => html`<a class="sheet-link" href="${href}">${label}${icon('arrow')}</a>`)}
     <div style="margin-top:auto;display:grid;gap:10px;padding-top:16px">
       <a class="btn btn-sos btn-block" href="tel:${normPhone(b.phone)}">${icon('phone')} Call ${b.phone}</a>
       <a class="btn btn-block" href="https://wa.me/${wa}" rel="noopener" target="_blank">${icon('whatsapp')} WhatsApp us</a>
@@ -269,13 +285,14 @@ function renderFooter(shell: Shell): SafeHtml {
           <li><a href="mailto:${b.email}">${b.email}</a></li>
           ${b.hours.map((h) => html`<li class="muted">${h.days}<br><span class="mono">${h.open}–${h.close}</span></li>`)}
           <li><a href="/contact">Contact &amp; help</a></li>
+          <li><a href="/mot-reminder">Free MOT reminder</a></li>
           <li><a href="/account">My garage &amp; reports</a></li>
         </ul>
       </div>
     </div>
     <div class="footer-bottom">
       <span>© ${year} ${b.legalName}. ${b.credentials.slice(0, 2).join(' · ')}</span>
-      <span class="row" style="gap:16px"><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/cookies">Cookies</a><button type="button" data-consent-reopen style="background:none;border:0;color:inherit;padding:0;font:inherit">Cookie settings</button><a href="/recovery-partners">Recovery partners</a><a href="/admin" rel="nofollow">Staff</a></span>
+      <span class="row" style="gap:16px">${shell.pages.filter((p) => p.footer && !['privacy', 'terms', 'cookies'].includes(p.slug)).map((p) => html`<a href="/${p.slug}">${p.label}</a>`)}<a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/cookies">Cookies</a><button type="button" data-consent-reopen style="background:none;border:0;color:inherit;padding:0;font:inherit">Cookie settings</button><a href="/recovery-partners">Recovery partners</a><a href="/admin" rel="nofollow">Staff</a></span>
     </div>
   </div>
 </footer>`;

@@ -52,6 +52,11 @@ export interface Settings {
       rateCardInNav: boolean;
     };
     maintenance: { on: boolean; message: string };
+    heroImageMediaId: number | null;
+    shareImageMediaId: number | null;
+    /** Homepage section text overrides. Empty = built-in wording. Wrap words in [brackets] to colour them. */
+    copy: Record<'services' | 'stage' | 'how' | 'results' | 'coverage' | 'reviews' | 'guides' | 'trade' | 'faq' | 'cta', { eyebrow: string; title: string; lead: string }>;
+    howSteps: { title: string; text: string }[];
   };
 }
 
@@ -146,6 +151,10 @@ export const DEFAULT_SETTINGS: Settings = {
     sections: HOME_SECTIONS.map(([key]) => ({ key, on: true })),
     features: { whatsappButton: true, mobileBar: true, emergencyStrip: true, installPrompt: true, tradeInNav: true, rateCardInNav: true },
     maintenance: { on: false, message: 'Online booking is paused for a moment while we update the site. Please call or WhatsApp us and we will book you in straight away.' },
+    heroImageMediaId: null,
+    shareImageMediaId: null,
+    copy: Object.fromEntries(['services', 'stage', 'how', 'results', 'coverage', 'reviews', 'guides', 'trade', 'faq', 'cta'].map((k) => [k, { eyebrow: '', title: '', lead: '' }])) as Settings['site']['copy'],
+    howSteps: [{ title: '', text: '' }, { title: '', text: '' }, { title: '', text: '' }, { title: '', text: '' }],
   },
 };
 

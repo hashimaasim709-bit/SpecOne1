@@ -220,6 +220,8 @@ resourceRoutes.post('/:resource', async (c) => {
   const settings = await getSettings(c.env.DB);
   const values = buildValues(res, body!, true, hiddenFor(c, res), todayIn(settings.business.timezone));
   if (res.pkType === 'text' && !values[res.pk]) fail(422, `${res.fields.find((f) => f.key === res.pk)?.label ?? 'Key'} is required.`, { [res.pk]: 'Required.' });
+  const RESERVED = ['admin', 'api', 'book', 'track', 'account', 'services', 'coverage', 'fault-codes', 'coding', 'gallery', 'reviews', 'faq', 'guides', 'fleet', 'emergency', 'recovery-partners', 'contact', 'support', 'help', 'trade', 'rate-card', 'flyer', 'prices', 'offline', 'media', 'docs', 'icons', 'assets', 'fonts', 'calendar', 'sitemap', 'robots', 'manifest', 'healthz', 'mot-reminder', 'callback'];
+  if (res.key === 'pages' && RESERVED.includes(String(values.slug))) fail(422, `"${values.slug}" is already used by the website — choose another address.`, { slug: 'Already in use.' });
   // Omit nulls so column defaults apply.
   const cols = Object.keys(values).filter((k) => values[k] !== null);
   const result = await run(c.env.DB, `INSERT INTO ${res.table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`, ...(cols.map((k) => values[k]) as (string | number)[]));

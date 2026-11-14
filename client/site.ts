@@ -241,10 +241,10 @@ $$<HTMLFormElement>('[data-enquiry-form]').forEach((form) =>
     const data = Object.fromEntries(new FormData(form).entries()) as Record<string, string>;
     btn.disabled = true;
     try {
-      await api(form.dataset.endpoint ?? '/api/public/enquiry', { body: { ...data, kind: form.dataset.kind ?? 'general', turnstileToken: turnstileToken(form) } });
+      const res = await api<{ message?: string }>(form.dataset.endpoint ?? '/api/public/enquiry', { body: { ...data, kind: form.dataset.kind ?? 'general', turnstileToken: turnstileToken(form) } });
       form.reset();
       $$('.chip[aria-pressed="true"]', form).forEach((c) => c.setAttribute('aria-pressed', 'false'));
-      out.innerHTML = `<div class="alert alert-good"><span>${esc(form.dataset.success ?? 'Thanks — we have your enquiry and will be in touch shortly.')}</span></div>`;
+      out.innerHTML = `<div class="alert alert-good"><span>${esc(res?.message || form.dataset.success || 'Thanks — we have your enquiry and will be in touch shortly.')}</span></div>`;
       out.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     } catch (err) {
       out.innerHTML = `<div class="alert alert-bad"><span>${esc(errorMessage(err))}</span></div>`;

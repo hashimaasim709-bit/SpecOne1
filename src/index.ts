@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import type { AppEnv, Env } from './env';
 import { loadSessions } from './lib/auth';
 import { randomToken } from './lib/crypto';
+import { withConnections } from './lib/connections';
 import { ensureDatabase, run } from './lib/db';
 import { baseSecurityHeaders, contentSecurityPolicy, HttpError, sameOriginOnly } from './lib/security';
 import { getSettings } from './lib/settings';
@@ -12,6 +13,7 @@ import { authRoutes } from './routes/auth';
 import { documentRoutes } from './routes/documents';
 import { marketingRoutes } from './routes/marketing';
 import { opsRoutes } from './routes/ops';
+import { connectionRoutes } from './routes/connections';
 import { pageRoutes, renderErrorPage } from './routes/pages';
 import { publicRoutes } from './routes/public';
 import { resourceRoutes } from './routes/resources';
@@ -58,6 +60,7 @@ app.route('/api/account', accountRoutes);
 app.route('/api/staff/auth', authRoutes);
 app.route('/api/admin', adminRoutes);
 app.route('/api/admin', opsRoutes);
+app.route('/api/admin', connectionRoutes);
 app.route('/api/admin/r', resourceRoutes);
 app.route('/', documentRoutes);
 app.route('/', marketingRoutes);
@@ -86,12 +89,13 @@ app.notFound(async (c) => {
 });
 
 export default {
-  fetch: app.fetch,
+  // Keys saved in the admin Connections centre are merged in (Cloudflare secrets take priority).
+  fetch: async (request: Request, env: Env, ctx: ExecutionContext) => app.fetch(request, await withConnections(env), ctx),
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(
       (async () => {
         await ensureDatabase(env.DB, seedDatabase);
-        const result = await runCron(env, controller.cron);
+        const result = await runCron(await withConnections(env), controller.cron);
         console.log('cron', controller.cron, JSON.stringify(result));
       })(),
     );

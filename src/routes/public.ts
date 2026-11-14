@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { BODIES, CONTACT_TOPICS, SLOT_ORDER, type ContactTopic } from '../../shared/constants';
-import { formatReg, isIsoDate, isUkPostcode, normPhone, normPostcode, outwardCode, timeAgo, todayIn } from '../../shared/format';
+import { addDays, formatDate, formatReg, isIsoDate, isUkPostcode, normPhone, normPostcode, outwardCode, timeAgo, todayIn } from '../../shared/format';
 import { travelFor } from '../../shared/pricing';
 import type { BookingConfig, CreateBookingResponse } from '../../shared/types';
 import type { AppEnv, Ctx } from '../env';
@@ -13,7 +13,7 @@ import { all, first, likeTerm, nowIso, run } from '../lib/db';
 import { intQuery, noStore, readJson, readUpload } from '../lib/http';
 import { fail, rateLimit, verifyTurnstile } from '../lib/security';
 import { getFlag, getSettings } from '../lib/settings';
-import { createBooking } from '../services/bookings';
+import { createBooking, upsertCustomer } from '../services/bookings';
 import { findPromo, getAvailability, getLocation, getQuoteConfig } from '../services/catalog';
 import { autoReply, FALLBACK_REPLY } from '../services/chatbot';
 import { geocodePostcode, hasAddressLookup, lookupAddresses, lookupReg } from '../services/lookups';
@@ -240,7 +240,8 @@ async function openInboxThread(c: Ctx, name: string, contact: string, author: st
 publicRoutes.post('/enquiry', async (c) => {
   await rateLimit(c, 'enquiry', 6, 3600);
   const input = await readJson(c, z.object({
-    kind: z.enum(['fleet', 'general', 'partner', 'contact']).default('general'),
+    kind: z.enum(['fleet', 'general', 'partner', 'contact', 'callback']).default('general'),
+    when: z.enum(['asap', 'morning', 'afternoon', 'evening', '']).default(''),
     name: z.string().trim().min(2).max(80),
     company: z.string().trim().max(120).default(''),
     phone: z.string().trim().max(24).default(''),
@@ -256,8 +257,9 @@ publicRoutes.post('/enquiry', async (c) => {
   if (input.website) fail(400, 'Unable to send.');
   if (!input.phone && !input.email) fail(422, 'Please give a phone number or email so we can reply.', { phone: 'Required.' });
   if (input.kind === 'contact' && input.message.length < 5) fail(422, 'Please tell us a little about what you need.', { message: 'Required.' });
+  if (input.kind === 'callback' && input.phone.replace(/\D/g, '').length < 10) fail(422, 'Please give the number to call.', { phone: 'Required.' });
   await verifyTurnstile(c, input.turnstileToken);
-  const heading = input.kind === 'fleet' ? 'Fleet / trade enquiry' : input.kind === 'partner' ? 'Partner enquiry' : input.kind === 'contact' ? `Contact form${input.topic ? ` — ${TOPIC_LABEL[input.topic]}` : ''}` : 'Enquiry';
+  const heading = input.kind === 'callback' ? `Call-back request — ${({ asap: 'as soon as possible', morning: 'in the morning', afternoon: 'in the afternoon', evening: 'in the evening', '': 'any time' } as const)[input.when]}` : input.kind === 'fleet' ? 'Fleet / trade enquiry' : input.kind === 'partner' ? 'Partner enquiry' : input.kind === 'contact' ? `Contact form${input.topic ? ` — ${TOPIC_LABEL[input.topic]}` : ''}` : 'Enquiry';
   const reg = input.reg ? formatReg(input.reg.toUpperCase().replace(/[^A-Z0-9]/g, '')) : '';
   const body = [
     `${heading}${input.company ? ` from ${input.company}` : ''}`,
@@ -267,9 +269,61 @@ publicRoutes.post('/enquiry', async (c) => {
     input.message,
   ].filter(Boolean).join('\n');
   const id = await openInboxThread(c, input.company ? `${input.name} (${input.company})` : input.name, [input.phone, input.email].filter(Boolean).join(' · '), input.name, body);
-  const urgent = input.topic === 'warning' || input.topic === 'feedback';
-  c.executionCtx.waitUntil(pushOwner(c.env, `${input.kind === 'fleet' ? 'Fleet enquiry' : input.kind === 'contact' ? 'Contact form' : 'New enquiry'}: ${input.company || input.name}`, body.slice(0, 400), `${originOf(c)}/admin#/inbox/${id}`, urgent ? 5 : 4, ['envelope']));
+  const urgent = input.topic === 'warning' || input.topic === 'feedback' || input.kind === 'callback';
+  c.executionCtx.waitUntil(pushOwner(c.env, `${input.kind === 'callback' ? '📞 Call back' : input.kind === 'fleet' ? 'Fleet enquiry' : input.kind === 'contact' ? 'Contact form' : 'New enquiry'}: ${input.company || input.name}${input.kind === 'callback' ? ` ${input.phone}` : ''}`, body.slice(0, 400), `${originOf(c)}/admin#/inbox/${id}`, urgent ? 5 : 4, ['envelope']));
   return c.json({ ok: true });
+});
+
+// ── Free MOT reminders: plate + contact, MOT date from the DVLA when connected ──
+publicRoutes.post('/mot-reminder', async (c) => {
+  await rateLimit(c, 'mot-reminder', 6, 3600);
+  const input = await readJson(c, z.object({
+    reg: z.string().trim().min(2).max(10),
+    name: z.string().trim().min(2).max(80),
+    phone: z.string().trim().max(24).default(''),
+    email: z.string().trim().max(120).default(''),
+    motDue: z.string().trim().max(10).default(''),
+    consent: z.union([z.literal('on'), z.literal('true'), z.boolean()]).optional(),
+    turnstileToken: z.string().max(4096).default(''),
+    website: z.string().max(200).default(''),
+  }));
+  if (input.website) fail(400, 'Unable to send.');
+  if (!input.consent) fail(422, 'Please tick the box so we can send your reminder.', { consent: 'Required.' });
+  if (!input.phone && !input.email) fail(422, 'Give a mobile number or email for the reminder.', { phone: 'Required.' });
+  await verifyTurnstile(c, input.turnstileToken);
+  const db = c.env.DB;
+  const settings = await getSettings(db);
+  const reg = input.reg.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (reg.length < 2) fail(422, 'Enter the registration number.', { reg: 'Required.' });
+  const looked = await lookupReg(c.env, reg).catch(() => null);
+  const motDue = looked?.motDue ?? (isIsoDate(input.motDue) ? input.motDue : null);
+  if (!motDue) fail(422, "We couldn't look up the MOT date automatically — please enter it (it's on your last MOT certificate).", { motDue: 'Required.' });
+  const today = todayIn(settings.business.timezone);
+  if (motDue! < today) fail(422, `That MOT ran out on ${motDue} — book an MOT now, then we'll remind you next year.`, { motDue: 'Expired.' });
+  const customer = await upsertCustomer(db, { name: input.name, email: input.email, phone: input.phone, marketing: true });
+  await run(db, 'UPDATE customers SET marketing_opt_in = 1 WHERE id = ?', customer.id);
+  const existing = await first<{ id: number; customer_id: number | null }>(db, 'SELECT id, customer_id FROM vehicles WHERE reg = ? ORDER BY id DESC LIMIT 1', reg);
+  let keeperNote = '';
+  let vehicleId: number | null = null;
+  if (existing && existing.customer_id && existing.customer_id !== customer.id) {
+    keeperNote = 'This vehicle is already on our system under another customer, so the reminder goes to them. Bought it recently? Call us and we will update it.';
+  } else if (existing) {
+    await run(db, 'UPDATE vehicles SET customer_id = ?, mot_due = ?, make = CASE WHEN make = \'\' THEN ? ELSE make END, colour = CASE WHEN colour = \'\' THEN ? ELSE colour END WHERE id = ?', customer.id, motDue, looked?.make ?? '', looked?.colour ?? '', existing.id);
+    vehicleId = existing.id;
+  } else {
+    vehicleId = (await run(db, "INSERT INTO vehicles (customer_id, reg, make, model, year, fuel, colour, size, body, mot_due) VALUES (?, ?, ?, '', ?, ?, ?, 'M', 'hatchback', ?)", customer.id, reg, looked?.make ?? '', looked?.year ?? null, looked?.fuel ?? '', looked?.colour ?? '', motDue)).id;
+  }
+  // The daily job reminds 3–4 weeks ahead; an MOT already inside that window gets its reminder now.
+  if (vehicleId && motDue! <= addDays(today, 30)) await run(db, "INSERT INTO scheduled_messages (kind, customer_id, vehicle_id, send_at) VALUES ('mot_reminder', ?, ?, ?)", customer.id, vehicleId, new Date(Date.now() + 10 * 60_000).toISOString());
+  const remind = addDays(motDue!, -28);
+  await audit(c, 'create', 'mot_reminder', reg, `MOT reminder sign-up for ${formatReg(reg)} (MOT due ${motDue})`);
+  const remindOn = remind > today ? remind : today;
+  return c.json({
+    ok: true, reg: formatReg(reg), motDue, remindOn,
+    message: keeperNote || `Done — ${formatReg(reg)}${looked?.make ? ` (${[looked.colour, looked.make].filter(Boolean).join(' ')})` : ''} has its MOT due ${formatDate(motDue!)}. We'll remind you ${remindOn === today ? 'shortly' : `on ${formatDate(remindOn)}`}${input.phone ? ' by text' : ''}${input.email ? `${input.phone ? ' and' : ' by'} email` : ''}.`,
+    vehicle: [looked?.colour, looked?.make].filter(Boolean).join(' '),
+    note: keeperNote,
+  });
 });
 
 // ── Trade account applications (trade portal) ──

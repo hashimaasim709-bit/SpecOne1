@@ -4,9 +4,28 @@ import L from 'leaflet';
 export type LatLng = [number, number];
 const ZONE_COLOURS = ['#10b981', '#f5a524', '#ff2e55', '#38bdf8'];
 
+/** MapTiler key from the page config (set in Admin → Connections); without one, standard OSM tiles. */
+function mapKey(): string {
+  try {
+    return (JSON.parse(document.getElementById('s1-config')?.textContent ?? '{}') as { mapKey?: string }).mapKey ?? '';
+  } catch {
+    return '';
+  }
+}
+
 export function createMap(el: HTMLElement, center: LatLng, zoom = 10): L.Map {
   const map = L.map(el, { scrollWheelZoom: false, zoomControl: true, attributionControl: true }).setView(center, zoom);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
+  const key = mapKey();
+  if (key) {
+    // Detailed vector-styled tiles with road names, in a style matching the site theme.
+    const dark = document.documentElement.dataset.theme !== 'light';
+    el.classList.add('map-styled');
+    L.tileLayer(`https://api.maptiler.com/maps/${dark ? 'streets-v2-dark' : 'streets-v2'}/256/{z}/{x}/{y}.png?key=${encodeURIComponent(key)}`, {
+      maxZoom: 20, attribution: '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(map);
+  } else {
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
+  }
   // Re-enable scroll zoom only after the user interacts, so the page scrolls normally.
   map.once('focus', () => map.scrollWheelZoom.enable());
   return map;

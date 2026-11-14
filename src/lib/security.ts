@@ -23,7 +23,7 @@ export const fail = (status: HttpError['status'], message: string, fields?: Reco
 /** Build the CSP for an HTML response. Third-party hosts are only allowed when that integration is configured. */
 export function contentSecurityPolicy(nonce: string, env: Env, settings: Settings | null): string {
   const script = ["'self'", `'nonce-${nonce}'`];
-  const img = ["'self'", 'data:', 'blob:', 'https://tile.openstreetmap.org', 'https://*.tile.openstreetmap.org'];
+  const img = ["'self'", 'data:', 'blob:', 'https://tile.openstreetmap.org', 'https://*.tile.openstreetmap.org', ...(env.MAPTILER_KEY ? ['https://api.maptiler.com'] : [])];
   const connect = ["'self'"];
   const frame = ['https://www.google.com', 'https://www.youtube-nocookie.com', 'https://www.instagram.com', 'https://www.tiktok.com'];
   if (env.TURNSTILE_SITE_KEY) {

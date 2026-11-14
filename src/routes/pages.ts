@@ -40,6 +40,9 @@ function pkgCard(p: PackageRow, cur: string): SafeHtml {
 const sectionHead = (eyebrow: string, title: SafeHtml | string, lead = '', action: SafeHtml | string = ''): SafeHtml =>
   html`<div class="section-head"><div><span class="eyebrow">${eyebrow}</span><h2 class="display">${title}</h2>${lead ? html`<p class="lead">${lead}</p>` : ''}</div>${action}</div>`;
 
+/** Admin-edited text: words in [brackets] are shown in the accent colour. */
+const accentText = (t: string): SafeHtml => html`${t.split(/(\[[^\]]+\])/).filter(Boolean).map((part) => (part.startsWith('[') && part.endsWith(']') ? html`<span class="accent">${part.slice(1, -1)}</span>` : part))}`;
+
 const stars = (n: number): string => '★★★★★'.slice(0, Math.round(n)) + '☆☆☆☆☆'.slice(0, 5 - Math.round(n));
 
 function reviewCard(r: { author: string; rating: number; body: string; vehicle: string; reviewed_on: string; source: string }): SafeHtml {
@@ -142,6 +145,9 @@ pageRoutes.get('/', async (c) => {
   const db = c.env.DB;
   const shell = await loadShell(c);
   const s = shell.settings;
+  const cp = s.site.copy;
+  const head = (k: keyof typeof cp, eyebrow: string, title: SafeHtml | string, lead = '', action: SafeHtml | string = '') =>
+    sectionHead(cp[k]?.eyebrow || eyebrow, cp[k]?.title ? accentText(cp[k].title) : title, cp[k]?.lead || lead, action);
   const loc = await getLocation(db);
   const cur = loc.currency;
   const [packages, faqs, reviews, gallery, guides, availability, rating] = await Promise.all([
@@ -202,7 +208,7 @@ pageRoutes.get('/', async (c) => {
     <a class="btn btn-primary btn-block btn-lg" href="/book">Book online ${icon('arrow')}</a>
     <a class="hero-contact-link" href="/contact">${icon('help')} Questions? Use the contact &amp; help form</a>
   </div>`;
-  const hero = html`<section class="hero grid-bg"><div class="wrap hero-grid${panel === 'none' ? ' hero-solo' : ''}">
+  const hero = html`<section class="hero grid-bg${shell.heroImage ? ' hero-photo' : ''}"${shell.heroImage ? raw(` style="--hero-img:url('${shell.heroImage.replace(/'/g, '')}')"`) : ''}><div class="wrap hero-grid${panel === 'none' ? ' hero-solo' : ''}">
   <div>
     <span class="eyebrow">${s.business.town} · ${s.business.region} · Mobile laboratory</span>
     <h1 class="display">${headline[0]}${headline[1] ? html`<span class="line-accent">${headline[1]}</span>` : ''}</h1>
@@ -217,7 +223,7 @@ pageRoutes.get('/', async (c) => {
   const marquee = html`<div class="marquee" aria-label="Credentials"><div class="marquee-track">${[...marqueeItems, ...marqueeItems].map((m) => html`<span class="marquee-item">${icon(m.includes('★') ? 'star' : m.toLowerCase().includes('insur') ? 'shield' : 'check')}${m}</span>`)}</div></div>`;
 
   const services = html`<section class="section"><div class="wrap">
-  ${sectionHead('Two divisions · one lab', html`Engineering-grade <span class="accent">care</span>`, 'Dealer-level diagnostics and coding alongside restorative detailing — all carried out at your home or workplace, with fixed prices and a written report.', html`<a class="btn" href="/services">All services ${icon('arrow')}</a>`)}
+  ${head('services', 'Two divisions · one lab', html`Engineering-grade <span class="accent">care</span>`, 'Dealer-level diagnostics and coding alongside restorative detailing — all carried out at your home or workplace, with fixed prices and a written report.', html`<a class="btn" href="/services">All services ${icon('arrow')}</a>`)}
   <div class="division-head" id="diagnostics"><span class="num">DIV 01</span><h3>Diagnostics &amp; coding</h3></div>
   <div class="grid grid-3">${featuredDiag.map((p) => pkgCard(p, cur))}</div>
   <div class="division-head" id="detailing"><span class="num">DIV 02</span><h3>Detailing &amp; ceramic</h3></div>
@@ -226,27 +232,27 @@ pageRoutes.get('/', async (c) => {
 </div></section>`;
 
   const stage = html`<section class="section section-alt"><div class="wrap">
-  ${sectionHead('Interactive stage', 'Explore by system', 'Tap a hotspot on the vehicle to see what we can diagnose, code, repair or restore — and switch body style to match yours.')}
+  ${head('stage', 'Interactive stage', 'Explore by system', 'Tap a hotspot on the vehicle to see what we can diagnose, code, repair or restore — and switch body style to match yours.')}
   ${vehicleStage(packages, cur)}
 </div></section>`;
 
   const how = html`<section class="section"><div class="wrap">
-  ${sectionHead('How it works', 'Booked in a minute')}
-  <div class="steps">
-    <div class="step"><h3>Pick your services</h3><p>Choose from fixed-price packages or describe the fault. Add up to ${s.booking.maxVehicles} vehicles in one visit.</p></div>
-    <div class="step"><h3>Choose a time</h3><p>Live availability shows what is open — including evening and emergency call-outs. Instant confirmation by text.</p></div>
-    <div class="step"><h3>Track the lab</h3><p>Follow the mobile lab to your door on a live map, then every stage of the job.</p></div>
-    <div class="step"><h3>Pay on completion</h3><p>Card, Apple Pay, Google Pay or cash. Your invoice and technical report stay in your garage account.</p></div>
-  </div>
+  ${head('how', 'How it works', 'Booked in a minute')}
+  <div class="steps">${([
+    ['Pick your services', `Choose from fixed-price packages or describe the fault. Add up to ${s.booking.maxVehicles} vehicles in one visit.`],
+    ['Choose a time', 'Live availability shows what is open — including evening and emergency call-outs. Instant confirmation by text.'],
+    ['Track the lab', 'Follow the mobile lab to your door on a live map, then every stage of the job.'],
+    ['Pay on completion', 'Card, Apple Pay, Google Pay or cash. Your invoice and technical report stay in your garage account.'],
+  ] as [string, string][]).map(([t, p], i) => html`<div class="step"><h3>${s.site.howSteps[i]?.title || t}</h3><p>${s.site.howSteps[i]?.text || p}</p></div>`)}</div>
 </div></section>`;
 
   const showcase = gallery.length
     ? html`<div class="masonry">${gallery.map(galleryTile)}</div>`
     : html`<div class="grid grid-2" style="align-items:center">${beforeAfter(html`<div class="ba-layer ba-demo-before"></div>`, html`<div class="ba-layer ba-demo-after"></div>`, 'Drag to compare the illustration')}<div><p class="lead">Swirls, oxidation and haze removed by machine correction, then locked in with ceramic protection.</p><p class="faint mono" style="font-size:.76rem;letter-spacing:.08em">ILLUSTRATION · REAL JOB PHOTOS APPEAR HERE ONCE ADDED IN THE ADMIN GALLERY</p><a class="btn" href="/gallery">Open the lab gallery ${icon('arrow')}</a></div></div>`;
-  const results = html`<section class="section section-alt"><div class="wrap">${sectionHead('Transformations', 'From the lab', '', html`<a class="btn" href="/gallery">Full gallery ${icon('arrow')}</a>`)}${showcase}</div></section>`;
+  const results = html`<section class="section section-alt"><div class="wrap">${head('results', 'Transformations', 'From the lab', '', html`<a class="btn" href="/gallery">Full gallery ${icon('arrow')}</a>`)}${showcase}</div></section>`;
 
   const coverage = html`<section class="section"><div class="wrap">
-  ${sectionHead('Coverage', html`We come <span class="accent">to you</span>`, `Based in ${s.business.town} and covering ${s.business.region}. Diagnostics and coding need no mains power or water.`)}
+  ${head('coverage', 'Coverage', html`We come <span class="accent">to you</span>`, `Based in ${s.business.town} and covering ${s.business.region}. Diagnostics and coding need no mains power or water.`)}
   <div class="grid grid-2" style="grid-template-columns:minmax(0,1.3fr) minmax(0,.7fr)">
     ${coverageMap(loc)}
     <div class="stack">${postcodeChecker(cur)}
@@ -257,7 +263,7 @@ pageRoutes.get('/', async (c) => {
 </div></section>`;
 
   const reviewsSection = reviews.length
-    ? html`<section class="section section-alt"><div class="wrap">${sectionHead('Reviews', 'Trusted locally', '', s.business.googleReviewUrl ? html`<a class="btn" href="${s.business.googleReviewUrl}" target="_blank" rel="noopener">${icon('star')} Google reviews</a>` : '')}<div class="grid grid-3">${reviews.map(reviewCard)}</div></div></section>`
+    ? html`<section class="section section-alt"><div class="wrap">${head('reviews', 'Reviews', 'Trusted locally', '', s.business.googleReviewUrl ? html`<a class="btn" href="${s.business.googleReviewUrl}" target="_blank" rel="noopener">${icon('star')} Google reviews</a>` : '')}<div class="grid grid-3">${reviews.map(reviewCard)}</div></div></section>`
     : s.business.googleReviewUrl
       ? html`<section class="section-tight"><div class="wrap"><div class="card spread"><div><span class="eyebrow">Reviews</span><h3>See what customers say on Google</h3></div><a class="btn btn-primary" href="${s.business.googleReviewUrl}" target="_blank" rel="noopener">${icon('star')} Read Google reviews</a></div></div></section>`
       : '';
@@ -267,17 +273,17 @@ pageRoutes.get('/', async (c) => {
   <div class="card"><form class="dtc-search" data-dtc-search action="/fault-codes">${icon('search')}<input class="input" name="q" placeholder="e.g. P2002, U0100" autocomplete="off" maxlength="20" aria-label="Fault code"></form><div class="dtc-results" data-dtc-results></div></div>
 </div></div></section>`;
 
-  const guidesSection = guides.length ? html`<section class="section section-alt"><div class="wrap">${sectionHead('Guides', 'Seasonal know-how', '', html`<a class="btn" href="/guides">All guides ${icon('arrow')}</a>`)}<div class="grid grid-3">${guides.map((g) => html`<a class="card card-link stack" href="/guides/${g.slug}"><span class="row"><span class="badge badge-accent">${g.season === 'all' ? g.category : g.season}</span><span class="meta">${g.read_minutes} min read</span></span><h3>${g.title}</h3><p class="muted" style="margin:0">${g.excerpt}</p></a>`)}</div></div></section>` : '';
+  const guidesSection = guides.length ? html`<section class="section section-alt"><div class="wrap">${head('guides', 'Guides', 'Seasonal know-how', '', html`<a class="btn" href="/guides">All guides ${icon('arrow')}</a>`)}<div class="grid grid-3">${guides.map((g) => html`<a class="card card-link stack" href="/guides/${g.slug}"><span class="row"><span class="badge badge-accent">${g.season === 'all' ? g.category : g.season}</span><span class="meta">${g.read_minutes} min read</span></span><h3>${g.title}</h3><p class="muted" style="margin:0">${g.excerpt}</p></a>`)}</div></div></section>` : '';
 
-  const faqSection = html`<section class="section"><div class="wrap wrap-narrow">${sectionHead('FAQ', 'Good questions')}${faq.html}<p style="margin-top:18px"><a class="accent" href="/faq">More answers →</a></p></div></section>`;
+  const faqSection = html`<section class="section"><div class="wrap wrap-narrow">${head('faq', 'FAQ', 'Good questions')}${faq.html}<p style="margin-top:18px"><a class="accent" href="/faq">More answers →</a></p></div></section>`;
 
   const fleet = html`<section class="section-tight"><div class="wrap"><div class="card grid grid-2" style="align-items:center">
-  <div><span class="eyebrow">Fleet &amp; trade</span><h2 class="display" style="font-size:2.2rem">Keep your fleet earning</h2><p class="muted">Taxi firms, dealers, bodyshops and company fleets: multi-vehicle visits, agreed rates, one monthly invoice and your own branded booking portal.</p><div class="row"><a class="btn btn-primary" href="/trade">Trade portal &amp; prices ${icon('arrow')}</a><a class="btn" href="/fleet">Fleet accounts</a></div></div>
+  <div><span class="eyebrow">${cp.trade?.eyebrow || 'Fleet & trade'}</span><h2 class="display" style="font-size:2.2rem">${cp.trade?.title ? accentText(cp.trade.title) : 'Keep your fleet earning'}</h2><p class="muted">${cp.trade?.lead || 'Taxi firms, dealers, bodyshops and company fleets: multi-vehicle visits, agreed rates, one monthly invoice and your own branded booking portal.'}</p><div class="row"><a class="btn btn-primary" href="/trade">Trade portal &amp; prices ${icon('arrow')}</a><a class="btn" href="/fleet">Fleet accounts</a></div></div>
   <div class="readouts"><div class="readout"><small>Vehicles per visit</small><b>Up to ${s.booking.maxVehicles}</b></div><div class="readout"><small>Multi-vehicle saving</small><b>${s.pricing.multiVehiclePct}% each</b></div><div class="readout"><small>Invoicing</small><b>Monthly</b></div><div class="readout"><small>Portal</small><b>Branded</b></div></div>
 </div></div></section>`;
 
   const sectionsByKey: Record<HomeSection, SafeHtml | ''> = {
-    hero, marquee, services, stage, how, results, coverage, reviews: reviewsSection, lookup, guides: guidesSection, trade: fleet, faq: faqSection, cta: ctaBand(shell),
+    hero, marquee, services, stage, how, results, coverage, reviews: reviewsSection, lookup, guides: guidesSection, trade: fleet, faq: faqSection, cta: ctaBand(shell, cp.cta?.title || undefined, cp.cta?.lead || undefined),
   };
   return c.html(renderPage(c, shell, {
     title: `${s.business.name} — Mobile Diagnostics, Coding & Detailing in ${s.business.town}`,
@@ -631,6 +637,8 @@ function legalPage(title: string, intro: string, sections: [string, string][]): 
 }
 
 pageRoutes.get('/privacy', async (c) => {
+  const custom = await customPage(c, 'privacy');
+  if (custom) return custom;
   const shell = await loadShell(c);
   const b = shell.settings.business;
   return c.html(renderPage(c, shell, {
@@ -647,6 +655,8 @@ pageRoutes.get('/privacy', async (c) => {
 });
 
 pageRoutes.get('/terms', async (c) => {
+  const custom = await customPage(c, 'terms');
+  if (custom) return custom;
   const shell = await loadShell(c);
   const b = shell.settings.business;
   const cur = b.currency;
@@ -664,6 +674,8 @@ pageRoutes.get('/terms', async (c) => {
 });
 
 pageRoutes.get('/cookies', async (c) => {
+  const custom = await customPage(c, 'cookies');
+  if (custom) return custom;
   const shell = await loadShell(c);
   return c.html(renderPage(c, shell, {
     title: 'Cookie Policy', description: 'The cookies and storage this website uses.', path: '/cookies',
@@ -699,8 +711,27 @@ pageRoutes.get('/admin', async (c) => {
 <script type="module" src="${asset('admin.js')}" nonce="${nonce}"></script></body></html>`.value);
 });
 
+// ───────────────────────────── Custom pages from the admin (About, Warranty, Careers…) ─────────────────────────────
+interface CustomPageRow { slug: string; title: string; eyebrow: string; intro: string; body: string; image_key: string | null; cta_label: string; cta_href: string; seo_description: string }
+
+async function customPage(c: Ctx, slug: string): Promise<Response | null> {
+  const p = await first<CustomPageRow>(c.env.DB, "SELECT p.*, m.storage_key AS image_key FROM pages p LEFT JOIN media m ON m.id = p.image_media_id AND m.visibility = 'public' WHERE p.slug = ? AND p.active = 1", slug).catch(() => null);
+  if (!p) return null;
+  const shell = await loadShell(c);
+  const bc = crumbs(shell, [[`/${p.slug}`, p.title]]);
+  const cta = p.cta_label && /^(\/|https:\/\/|tel:|mailto:)/.test(p.cta_href) ? html`<a class="btn btn-primary btn-lg" href="${p.cta_href}">${p.cta_label} ${icon('arrow')}</a>` : '';
+  return c.html(renderPage(c, shell, {
+    title: p.title, description: (p.seo_description || p.intro || p.title).slice(0, 158), path: `/${p.slug}`, jsonLd: [bc.ld],
+    image: p.image_key ? `${shell.origin}${mediaUrl(p.image_key)}` : undefined,
+    body: html`<section class="page-head grid-bg"><div class="wrap${p.image_key ? ' page-head-media' : ''}"><div>${bc.html}${p.eyebrow ? html`<span class="eyebrow">${p.eyebrow}</span>` : ''}<h1 class="display">${accentText(p.title)}</h1>${p.intro ? html`<p class="lead">${p.intro}</p>` : ''}${cta ? html`<div class="row" style="margin-top:18px">${cta}</div>` : ''}</div>${p.image_key ? html`<img class="page-head-img" src="${mediaUrl(p.image_key)}" alt="" loading="eager">` : ''}</div></section>
+${p.body ? html`<section class="section-tight"><div class="wrap wrap-narrow wrap-start prose">${markdown(p.body)}</div></section>` : ''}${ctaBand(shell)}`,
+  }));
+}
+
 // ───────────────────────────── Town landing pages (#46) — keep last ─────────────────────────────
 pageRoutes.get('/:slug{[a-z0-9-]{2,60}}', async (c) => {
+  const custom = await customPage(c, c.req.param('slug'));
+  if (custom) return custom;
   const db = c.env.DB;
   const town = await first<{ slug: string; name: string; headline: string; intro: string; postcodes: string; areas: string; lat: number | null; lng: number | null; body: string }>(db, 'SELECT * FROM towns WHERE slug = ? AND active = 1', c.req.param('slug'));
   if (!town) return c.notFound();

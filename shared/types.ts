@@ -226,6 +226,7 @@ export interface TrackPayload {
   documents: { label: string; href: string }[];
   reviewUrl: string;
   business: { name: string; phone: string; whatsapp: string };
+  canReschedule: boolean;
   estimates: { id: number; title: string; note: string; items: { name: string; qty: number; unitPrice: number }[]; total: number; status: 'pending' | 'approved' | 'declined'; decidedAt: string | null; createdAt: string }[];
 }
 

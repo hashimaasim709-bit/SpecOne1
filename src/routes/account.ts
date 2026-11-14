@@ -3,15 +3,16 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { formatReg, isValidEmail, normPhone } from '../../shared/format';
-import type { AppEnv } from '../env';
+import type { AppEnv, Ctx } from '../env';
 import { originOf } from '../env';
 import { audit, createSession, customerOrFail, destroySession } from '../lib/auth';
 import { randomDigits, randomToken, sha256Hex, timingSafeEqual } from '../lib/crypto';
 import { all, first, inMinutes, nowIso, run } from '../lib/db';
-import { intParam, noStore, readJson } from '../lib/http';
+import { download, intParam, noStore, readJson } from '../lib/http';
 import { fail, rateLimit } from '../lib/security';
 import { getSettings } from '../lib/settings';
 import { emailLayout, pushOwner, sendEmail, sendSms } from '../services/notify';
+import { buildStatement } from './ops';
 
 export const accountRoutes = new Hono<AppEnv>();
 
@@ -86,8 +87,9 @@ accountRoutes.get('/me', async (c) => {
     all(db, 'SELECT points, reason, created_at FROM loyalty_ledger WHERE customer_id = ? ORDER BY id DESC LIMIT 30', me.id),
   ]);
   const referrals = await first<{ n: number }>(db, 'SELECT COUNT(*) AS n FROM customers WHERE referred_by = ?', me.id);
+  const trade = await tradeAccountFor(c, me.email);
   return c.json({
-    profile, vehicles, bookings, subscriptions, ledger,
+    profile, vehicles, bookings, subscriptions, ledger, trade,
     loyalty: { ...settings.pricing.loyalty, referrals: referrals?.n ?? 0 },
     currency: settings.business.currency,
     shareUrl: `${originOf(c)}/book?promo=${encodeURIComponent(String((profile as { referral_code?: string } | null)?.referral_code ?? ''))}`,
@@ -139,4 +141,21 @@ accountRoutes.post('/subscriptions/:id', async (c) => {
   await audit(c, action, 'subscription', id, `Customer ${action}d their plan`);
   c.executionCtx.waitUntil(pushOwner(c.env, `Plan ${status}`, `${me.name} ${action}d subscription #${id}.`, `${originOf(c)}/admin#/r/subscriptions`, 3));
   return c.json({ ok: true, status });
+});
+
+/** An approved trade account whose email matches the signed-in customer. */
+async function tradeAccountFor(c: Ctx, email: string): Promise<{ id: number; name: string; code: string; discount: number; months: { month: string; jobs: number; total: number }[] } | null> {
+  if (!email) return null;
+  const p = await first<{ id: number; name: string; code: string; customer_discount_pct: number }>(c.env.DB, "SELECT id, name, code, customer_discount_pct FROM partners WHERE lower(email) = lower(?) AND trade_status = 'approved' AND active = 1 LIMIT 1", email);
+  if (!p) return null;
+  const months = await all<{ month: string; jobs: number; total: number }>(c.env.DB, "SELECT substr(date, 1, 7) AS month, COUNT(*) AS jobs, SUM(total) AS total FROM bookings WHERE partner_id = ? AND status NOT IN ('cancelled','no_show') GROUP BY month ORDER BY month DESC LIMIT 12", p.id);
+  return { id: p.id, name: p.name, code: p.code, discount: p.customer_discount_pct, months };
+}
+
+accountRoutes.get('/trade/statement.pdf', async (c) => {
+  const me = customerOrFail(c);
+  const trade = await tradeAccountFor(c, me.email);
+  if (!trade) fail(404, 'No trade account is linked to this email.');
+  const { bytes, filename } = await buildStatement(c, trade!.id, c.req.query('month'));
+  return download(bytes as Uint8Array<ArrayBuffer>, filename, 'application/pdf', c.req.query('download') !== '1');
 });

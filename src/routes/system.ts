@@ -103,7 +103,7 @@ systemRoutes.get('/sitemap.xml', async (c) => {
     all<{ code: string }>(db, 'SELECT code FROM dtc_codes WHERE public = 1'),
   ]);
   const urls: [string, string?][] = [
-    ['/'], ['/book'], ['/services'], ['/rate-card'], ['/trade'], ['/contact'], ['/coverage'], ['/emergency'], ['/fault-codes'], ['/coding'], ['/gallery'], ['/reviews'], ['/faq'], ['/guides'], ['/fleet'], ['/recovery-partners'], ['/privacy'], ['/terms'],
+    ['/'], ['/book'], ['/services'], ['/rate-card'], ['/trade'], ['/contact'], ['/mot-reminder'], ['/coverage'], ['/emergency'], ['/fault-codes'], ['/coding'], ['/gallery'], ['/reviews'], ['/faq'], ['/guides'], ['/fleet'], ['/recovery-partners'], ['/privacy'], ['/terms'],
     ...packages.map((p): [string] => [`/services/${p.slug}`]),
     ...towns.map((t): [string] => [`/${t.slug}`]),
     ...guides.map((g): [string, string] => [`/guides/${g.slug}`, g.published_on]),

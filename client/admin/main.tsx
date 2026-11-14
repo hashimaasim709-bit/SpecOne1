@@ -16,6 +16,7 @@ import { ReportsView } from './views/finance';
 import { JobCard } from './views/job';
 import { ChecklistView, LibraryView } from './views/library';
 import { ResourceView } from './views/resources';
+import { ConnectionsView } from './views/connections';
 import { SettingsView } from './views/settings';
 
 export interface Me { id: number; name: string; email: string; role: string; permissions: Permission[] }
@@ -190,8 +191,8 @@ function navGroups(me: Me, counts: { inbox: number; pending: number }): [string,
     ['Customers', [r('customers', 'users'), r('vehicles', 'car'), r('subscriptions', 'refresh', 'Subscriptions'), r('partners', 'users', 'Trade partners')]],
     ['Money & stock', [{ href: 'reports', label: 'Reports & tax', icon: 'chart', perm: 'finance.read' }, r('expenses', 'money'), r('commissions', 'money', 'Commissions'), r('inventory', 'box', 'Stock & chemicals'), r('parts_requests', 'clipboard', 'Parts orders'), r('licences', 'key', 'Licences & tokens')]],
     ['Workshop', [{ href: 'library', label: 'Tech library', icon: 'book', perm: 'tech.read' }, r('dpf_logs', 'gauge', 'DPF log'), r('battery_tests', 'gauge', 'Battery tests'), r('flash_log', 'wrench', 'Flash log'), r('freeze_frames', 'chart', 'Freeze frames'), r('checklist_templates', 'clipboard', 'Checklists')]],
-    ['Website & marketing', [r('packages', 'tag', 'Services & prices'), r('plans', 'refresh', 'Plans'), r('upsell_rules', 'sparkle', 'Smart upsells'), r('pricing_rules', 'gauge', 'Peak pricing'), r('promo_codes', 'tag', 'Promo codes'), r('flyers', 'file', 'Flyer studio'), r('banners', 'megaphone', 'Banners'), r('gallery_items', 'camera', 'Lab gallery'), r('reviews', 'sparkle', 'Reviews'), { href: 'feedback', label: 'Feedback insights', icon: 'sparkle', perm: 'content.write' }, r('faqs', 'list', 'FAQs'), r('towns', 'today', 'Town pages'), r('fleet_portals', 'users', 'Fleet portals'), r('guides', 'book', 'Guides'), r('chatbot_rules', 'inbox', 'Chat auto-replies')]],
-    ['System', [{ href: 'settings', label: 'Settings', icon: 'settings' }, r('locations', 'today', 'Locations'), r('vans', 'car', 'Vans'), r('webhooks', 'external', 'Webhooks'), { href: 'settings/audit', label: 'Audit trail', icon: 'shield', perm: 'audit.read' }]],
+    ['Website & marketing', [{ href: 'settings/site', label: 'Website studio', icon: 'palette', perm: 'settings.write' }, r('pages', 'file', 'Website pages'), r('packages', 'tag', 'Services & prices'), r('plans', 'refresh', 'Plans'), r('upsell_rules', 'sparkle', 'Smart upsells'), r('pricing_rules', 'gauge', 'Peak pricing'), r('promo_codes', 'tag', 'Promo codes'), r('flyers', 'file', 'Flyer studio'), r('banners', 'megaphone', 'Banners'), r('gallery_items', 'camera', 'Lab gallery'), r('reviews', 'sparkle', 'Reviews'), { href: 'feedback', label: 'Feedback insights', icon: 'sparkle', perm: 'content.write' }, r('faqs', 'list', 'FAQs'), r('towns', 'today', 'Town pages'), r('fleet_portals', 'users', 'Fleet portals'), r('guides', 'book', 'Guides'), r('chatbot_rules', 'inbox', 'Chat auto-replies')]],
+    ['System', [{ href: 'connections', label: 'Connections', icon: 'globe', perm: 'settings.write' }, { href: 'settings', label: 'Settings', icon: 'settings' }, r('locations', 'today', 'Locations'), r('vans', 'car', 'Vans'), r('webhooks', 'external', 'Webhooks'), { href: 'settings/audit', label: 'Audit trail', icon: 'shield', perm: 'audit.read' }]],
   ];
   return groups.map(([g, items]) => [g, items.filter((i) => !i.perm || can(me, i.perm))] as [string, NavItem[]]).filter(([, items]) => items.length);
 }
@@ -304,6 +305,7 @@ function Shell({ me, state, onLock }: { me: Me; state: AuthState; onLock: () => 
   else if (a === 'checklist' && b) view = <ChecklistView runId={Number(b)} me={me} />;
   else if (a === 'r' && b) view = <ResourceView key={b} resourceKey={b} me={me} openId={c} />;
   else if (a === 'settings') view = <SettingsView me={me} section={b ?? 'business'} />;
+  else if (a === 'connections') view = <ConnectionsView me={me} />;
   else view = <div class="empty">Page not found. <a href="#/dashboard">Go to dashboard</a></div>;
 
   const toggleTheme = () => {

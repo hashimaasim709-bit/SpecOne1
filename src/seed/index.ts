@@ -3,6 +3,7 @@
 import { run, stmt } from '../lib/db';
 import { BANNERS, CHATBOT_RULES, FAQS, GUIDES, TOWNS } from './content';
 import { INVENTORY, LICENCES, LOCATION, PACKAGES, PARTNERS, PLANS, PRICING_RULES, PROMOS, UPSELLS, VAN } from './catalog';
+import { DTC_EXTRA } from './dtc-extra';
 import { CHECKLISTS, CODING_MATRIX, DTC_CODES, TECH_GUIDES, TORQUE_SPECS, WIRING_REFS } from './technical';
 
 const SEED_VERSION = '1';
@@ -18,7 +19,33 @@ async function batched(db: D1Database, statements: D1PreparedStatement[], size =
   for (let i = 0; i < statements.length; i += size) await db.batch(statements.slice(i, i + size));
 }
 
+/**
+ * Content added after launch, delivered to existing databases too. Each pack runs once
+ * (atomic flag) and uses INSERT OR IGNORE, so anything edited in the admin is left alone.
+ */
+const CONTENT_PACKS: { flag: string; rows: () => [string, Record<string, unknown>[]][] }[] = [
+  { flag: 'content_dtc_v2', rows: () => [['dtc_codes', DTC_EXTRA]] },
+];
+
+async function contentPacks(db: D1Database): Promise<void> {
+  for (const pack of CONTENT_PACKS) {
+    const claim = await run(db, "INSERT INTO settings (key, value) VALUES (?, '1') ON CONFLICT(key) DO NOTHING", `flag:${pack.flag}`);
+    if (!claim.changes) continue;
+    try {
+      await batched(db, pack.rows().flatMap(([table, rows]) => inserts(db, table, rows)));
+    } catch (err) {
+      await run(db, 'DELETE FROM settings WHERE key = ?', `flag:${pack.flag}`);
+      throw err;
+    }
+  }
+}
+
 export async function seedDatabase(db: D1Database): Promise<void> {
+  await seedBase(db);
+  await contentPacks(db);
+}
+
+async function seedBase(db: D1Database): Promise<void> {
   // Claim the flag atomically: only one isolate ever proceeds past this line.
   const claim = await run(db, "INSERT INTO settings (key, value) VALUES ('flag:seed_version', ?) ON CONFLICT(key) DO NOTHING", SEED_VERSION);
   if (!claim.changes) return;

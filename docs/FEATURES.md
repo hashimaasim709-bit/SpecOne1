@@ -165,3 +165,17 @@ Admin → Settings → **Website studio** (owners and managers only):
 - **Homepage sections** — switch any section off or move it up and down.
 - **Feature switches** — emergency strip, WhatsApp button, phone action bar, install prompt, live chat, recent-booking pop-ups, seasonal banners, "Prices" and "Trade" in the menu.
 - **Pause online booking** — shows your message on every page and asks customers to call or WhatsApp; staff can still book.
+
+## Round 3 — fully managed from the admin
+
+| Feature | Where / how |
+|---|---|
+| **Connections centre** | Admin → Connections: every outside service with plain-English steps, a paste box, a **Test** button and live status. Keys are encrypted (AES-256-GCM, keyed from `SETUP_TOKEN`) and never shown again; Cloudflare secrets still take priority. One tap creates a private ntfy alert channel with a QR code to subscribe. See `docs/SETUP.md` |
+| **Website pages** | Admin → Website pages: About us, Warranty, Careers… with photo, rich text, button, Google description, menu/footer placement. Pages named `privacy`, `terms` or `cookies` replace the built-in ones |
+| **Homepage wording & images** | Website studio: every section heading and introduction, the four "how it works" steps, a homepage background photo and the social share image |
+| **Detailed maps** | MapTiler key in Connections → dark/light street maps with road names on the coverage map and live tracker (OpenStreetMap otherwise) |
+| **Fault-code library** | 145 codes built in (90 added), delivered to existing databases without touching edited codes; **Import list** pastes codes from Excel/Sheets/CSV |
+| **Self-service reschedule** | Tracker → Change date or time: open days and windows only, reminder moved, you get an alert |
+| **Free MOT reminders** | `/mot-reminder`: plate + contact → MOT date from the DVLA (or typed in) → reminder ~4 weeks before |
+| **Call-me-back** | Contact page: name, number and preferred time → priority phone alert |
+| **Trade area in My garage** | Approved trade customers see their trade code, discount, "Book at trade rates" and monthly statement PDFs |

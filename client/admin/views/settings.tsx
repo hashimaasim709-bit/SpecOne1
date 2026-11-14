@@ -85,7 +85,7 @@ export function SettingsView({ me, section }: { me: Me; section: string }) {
                 { path: 'sumupLink', label: 'SumUp payment link (optional)', help: 'Shown to staff for card-reader-free payments.' },
                 { path: 'chat', label: 'Show live chat on the website', type: 'bool' }, { path: 'socialProof', label: 'Show anonymised recent-booking notifications', type: 'bool' }, { path: 'seasonalBanners', label: 'Show seasonal promo banners automatically', type: 'bool' },
               ]} />
-              <div class="panel" style="max-width:820px"><h3 style="margin-bottom:10px">Connected services</h3><div class="list">{Object.entries(data.integrations).map(([, i]) => <div class="list-row"><span class={`badge ${i.on ? 'badge-good' : ''}`}>{i.on ? 'On' : 'Off'}</span><span class="grow" style="white-space:normal"><b style="white-space:normal">{i.label}</b><span class="mono" style="font-size:.74rem">{i.secrets}</span></span></div>)}</div><p class="faint" style="font-size:.84rem;margin:10px 0 0">Secrets are set on the Worker with <span class="mono">npx wrangler secret put NAME</span> — see docs/DEPLOY.md. They are never shown or stored in the database.</p></div>
+              <div class="panel" style="max-width:820px"><h3 style="margin-bottom:10px">Connected services</h3><div class="list">{Object.entries(data.integrations).map(([, i]) => <div class="list-row"><span class={`badge ${i.on ? 'badge-good' : ''}`}>{i.on ? 'On' : 'Off'}</span><span class="grow" style="white-space:normal"><b style="white-space:normal">{i.label}</b><span class="mono" style="font-size:.74rem">{i.secrets}</span></span></div>)}</div><p class="faint" style="font-size:.84rem;margin:10px 0 0">Add and test service keys in <a href="#/connections">Connections</a> — step-by-step, no code. Keys set as Cloudflare secrets take priority.</p></div>
             </div>
           )}
           {active === 'tax' && data.settings.tax && <Form section="tax" data={data.settings.tax} onSaved={updated('tax')} fields={[
@@ -424,6 +424,36 @@ function SiteStudio({ site, branding, integrations, onSaved }: { site: Obj; bran
       </div>
 
       <div class="panel stack">
+        <div class="panel-head" style="margin:0"><h3><Icon name="camera" /> Images</h3></div>
+        <div class="form-grid">
+          <StudioImage label="Homepage background photo" help="A wide photo of the van or a finished car. It sits behind the headline with a dark fade so text stays readable." value={(getPath(s, 'heroImageMediaId') as number | null) ?? null} onChange={(v) => setS(setPath(s, 'heroImageMediaId', v))} />
+          <StudioImage label="Share image" help="Shown when your site is shared on WhatsApp, Facebook or in messages. Best at 1200 × 630." value={(getPath(s, 'shareImageMediaId') as number | null) ?? null} onChange={(v) => setS(setPath(s, 'shareImageMediaId', v))} />
+        </div>
+        <p class="faint" style="margin:0;font-size:.82rem">Logo and app icons: <a href="#/settings/branding">Branding</a>. Job photos and before/afters: <a href="#/r/gallery_items">Lab gallery</a>.</p>
+      </div>
+
+      <div class="panel stack">
+        <div class="panel-head" style="margin:0"><h3><Icon name="pen" /> Homepage wording</h3><span class="faint" style="font-size:.82rem">Leave blank to keep the built-in text</span></div>
+        <p class="faint" style="margin:0;font-size:.84rem">Wrap a word in [square brackets] to show it in the accent colour, e.g. “We come [to you]”.</p>
+        {COPY_SECTIONS.map(([k, label]) => (
+          <details class="copy-block">
+            <summary>{label}{(getPath(s, `copy.${k}.title`) || getPath(s, `copy.${k}.lead`)) ? <span class="badge badge-good" style="margin-left:8px">Edited</span> : null}</summary>
+            <div class="form-grid">
+              <div class="field"><label>Small heading</label><input class="input" value={String(getPath(s, `copy.${k}.eyebrow`) ?? '')} onInput={(e) => setS(setPath(s, `copy.${k}.eyebrow`, (e.target as HTMLInputElement).value))} /></div>
+              <div class="field"><label>Title</label><input class="input" value={String(getPath(s, `copy.${k}.title`) ?? '')} onInput={(e) => setS(setPath(s, `copy.${k}.title`, (e.target as HTMLInputElement).value))} /></div>
+            </div>
+            <div class="field"><label>Introduction</label><textarea class="textarea" style="min-height:70px" value={String(getPath(s, `copy.${k}.lead`) ?? '')} onInput={(e) => setS(setPath(s, `copy.${k}.lead`, (e.target as HTMLTextAreaElement).value))} /></div>
+            {k === 'how' && [0, 1, 2, 3].map((i) => (
+              <div class="form-grid">
+                <div class="field"><label>Step {i + 1} title</label><input class="input" value={String((getPath(s, 'howSteps') as { title: string }[] | undefined)?.[i]?.title ?? '')} onInput={(e) => setS(setPath(s, 'howSteps', stepsWith(getPath(s, 'howSteps'), i, 'title', (e.target as HTMLInputElement).value)))} /></div>
+                <div class="field"><label>Step {i + 1} text</label><input class="input" value={String((getPath(s, 'howSteps') as { text: string }[] | undefined)?.[i]?.text ?? '')} onInput={(e) => setS(setPath(s, 'howSteps', stepsWith(getPath(s, 'howSteps'), i, 'text', (e.target as HTMLInputElement).value)))} /></div>
+              </div>
+            ))}
+          </details>
+        ))}
+      </div>
+
+      <div class="panel stack">
         <div class="panel-head" style="margin:0"><h3><Icon name="list" /> Homepage sections</h3><span class="faint" style="font-size:.82rem">Switch off or reorder</span></div>
         <div class="list">{sections.map((sec, idx) => (
           <div class="list-row">
@@ -456,6 +486,41 @@ function SiteStudio({ site, branding, integrations, onSaved }: { site: Obj; bran
       </div>
 
       <div class="studio-save"><button class="btn btn-primary btn-lg" type="button" disabled={busy} onClick={save}>Publish changes</button><a class="btn btn-lg" href="/" target="_blank" rel="noopener">Preview site <Icon name="external" /></a></div>
+    </div>
+  );
+}
+
+const COPY_SECTIONS: [string, string][] = [['services', 'Featured services'], ['stage', 'Interactive vehicle stage'], ['how', 'How it works (and its 4 steps)'], ['results', 'Transformations gallery'], ['coverage', 'Coverage'], ['reviews', 'Reviews'], ['guides', 'Guides'], ['trade', 'Fleet & trade'], ['faq', 'FAQ'], ['cta', 'Booking call-to-action (title and text)']];
+
+function stepsWith(current: unknown, i: number, key: 'title' | 'text', value: string): { title: string; text: string }[] {
+  const steps = Array.from({ length: 4 }, (_, j) => ({ title: '', text: '', ...((current as { title: string; text: string }[] | undefined)?.[j] ?? {}) }));
+  steps[i] = { ...steps[i]!, [key]: value };
+  return steps;
+}
+
+/** Image picker for the studio: compresses on the phone, uploads, previews. */
+function StudioImage({ label, help, value, onChange }: { label: string; help: string; value: number | null; onChange: (v: number | null) => void }) {
+  const [url, setUrl] = useState('');
+  const [busy, act] = useAction();
+  useEffect(() => {
+    if (value) get<{ url: string }>(`/media/${value}`).then((r) => setUrl(r.data.url)).catch(() => setUrl(''));
+    else setUrl('');
+  }, [value]);
+  return (
+    <div class="field"><span class="label">{label}</span>
+      <div class="studio-image">{url ? <img src={url} alt="" /> : <span class="faint">No image</span>}</div>
+      <div class="row">
+        <label class="btn btn-sm"><Icon name="camera" /> {value ? 'Replace' : 'Upload'}<input type="file" accept="image/*" hidden onChange={async (e) => {
+          const file = (e.target as HTMLInputElement).files?.[0];
+          if (!file) return;
+          const blob = await compressImage(file, 2000, 0.84);
+          const r = await act(() => upload('/media', blob, { kind: 'gallery', label }, 'image.jpg'));
+          if (r) onChange(r.id);
+        }} /></label>
+        {value && <button class="btn btn-sm btn-ghost" type="button" onClick={() => onChange(null)}>Remove</button>}
+        {busy && <span class="spinner" />}
+      </div>
+      <span class="hint">{help}</span>
     </div>
   );
 }
