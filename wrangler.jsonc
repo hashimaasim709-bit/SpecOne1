@@ -1,0 +1,51 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "specone-auto-labs",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Static files (fonts, icons, hashed JS/CSS bundles) are served straight from
+  // Cloudflare's edge without invoking the Worker.
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+
+  // Bundles the browser apps and compiles the SQL migrations before every dev/deploy.
+  "build": { "command": "node scripts/build.mjs", "watch_dir": ["client", "shared", "migrations", "src/routes", "src/services", "src/lib", "src/seed", "src/views"] },
+
+  // D1 (SQLite). No "database_id" needed: the first `wrangler deploy` creates the
+  // database automatically and later deploys reuse it. The Worker creates its own
+  // tables on first start, so no separate migration step is required.
+  // The name is deliberately unique: Wrangler would otherwise connect to an existing
+  // database of the same name, such as the previous site's (which has a different shape).
+  "d1_databases": [
+    { "binding": "DB", "database_name": "specone-platform-v2", "migrations_dir": "migrations" }
+  ],
+
+  // R2 (optional) adds video uploads, larger photos and nightly encrypted backups.
+  // Without it, photos are stored in the database. Cloudflare asks for a payment card
+  // before R2 can be switched on (the free allowance still applies). To enable:
+  // dashboard → R2 → enable, then uncomment this block and push.
+  // "r2_buckets": [
+  //   { "binding": "MEDIA", "bucket_name": "specone-media" }
+  // ],
+
+  // Every 10 minutes: reminders, review requests, webhook retries.
+  // 03:15 UTC daily: encrypted database backup, subscription visits, housekeeping.
+  "triggers": { "crons": ["*/10 * * * *", "15 3 * * *"] },
+
+  "observability": { "enabled": true },
+
+  "vars": {
+    "APP_ENV": "production",
+    // Used in links sent by text, WhatsApp and email.
+    "PUBLIC_ORIGIN": "https://speconeautolabs.co.uk"
+  },
+
+  // Your domain. On deploy, Cloudflare points these at this Worker (taking them over
+  // from the previous site if needed) and issues the SSL certificates automatically.
+  // www redirects to the main address.
+  "routes": [
+    { "pattern": "speconeautolabs.co.uk", "custom_domain": true },
+    { "pattern": "www.speconeautolabs.co.uk", "custom_domain": true }
+  ]
+}

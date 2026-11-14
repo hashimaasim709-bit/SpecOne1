@@ -1,0 +1,47 @@
+{
+  "name": "specone-auto-labs",
+  "version": "2.0.0",
+  "private": true,
+  "description": "SpecOne Auto Labs — mobile diagnostics, coding and detailing platform (Cloudflare Workers + D1)",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "wrangler dev",
+    "typecheck": "npm run build && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm test",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate": "wrangler d1 migrations apply DB --remote",
+    "deploy": "npm run check && wrangler deploy",
+    "icons": "node scripts/make-icons.mjs",
+    "vendor": "node scripts/vendor.mjs",
+    "export:source": "node scripts/export-source.mjs",
+    "backup:decrypt": "node scripts/decrypt-backup.mjs",
+    "twa": "bash scripts/twa/build-twa.sh",
+    "import:legacy": "node scripts/import-legacy.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "@simplewebauthn/browser": "^14.0.0",
+    "@simplewebauthn/server": "^14.1.0",
+    "hono": "^4.13.18",
+    "leaflet": "^1.9.4",
+    "pdf-lib": "^1.17.1",
+    "preact": "^11.2.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261113.1",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource/barlow-condensed": "^5.3.0",
+    "@types/leaflet": "^1.9.22",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0",
+    "wrangler": "^4.161.0"
+  }
+}
