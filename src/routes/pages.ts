@@ -1,14 +1,14 @@
 // Server-rendered public pages. Interactive parts (booking wizard, tracker, account,
 // maps, chat) are hydrated by small client bundles.
 import { Hono } from 'hono';
-import { SLOTS, VEHICLE_ZONES, type SlotKey } from '../../shared/constants';
+import { SLOTS, VEHICLE_ZONES, type HomeSection, type SlotKey } from '../../shared/constants';
 import { formatDate, haversineMiles, money, normPhone, todayIn } from '../../shared/format';
 import { travelFor } from '../../shared/pricing';
 import type { AppEnv, Ctx } from '../env';
 import { all, first, parseJson } from '../lib/db';
 import { html, jsonForScript, markdown, raw, type SafeHtml } from '../lib/html';
 import { fail } from '../lib/security';
-import { getSettings } from '../lib/settings';
+import { getSettings, siteSections } from '../lib/settings';
 import { getAvailability, getLocation, getPackages, travelBandsOf, type LocationRow, type PackageRow } from '../services/catalog';
 import { getBookingByToken } from '../services/bookings';
 import { mediaUrl } from '../services/media';
@@ -174,15 +174,9 @@ pageRoutes.get('/', async (c) => {
   const split = s.branding.heroHeadline.indexOf('. ');
   const headline = split > 0 ? [s.branding.heroHeadline.slice(0, split + 1), s.branding.heroHeadline.slice(split + 2)] : [s.branding.heroHeadline, ''];
 
-  const hero = html`<section class="hero grid-bg"><div class="wrap hero-grid">
-  <div>
-    <span class="eyebrow">${s.business.town} · ${s.business.region} · Mobile laboratory</span>
-    <h1 class="display">${headline[0]}${headline[1] ? html`<span class="line-accent">${headline[1]}</span>` : ''}</h1>
-    <p class="lead">${s.branding.heroSub}</p>
-    <div class="hero-ctas"><a class="btn btn-primary btn-lg" href="/book">Book a visit ${icon('arrow')}</a><a class="btn btn-sos btn-lg" href="/emergency">${icon('alert')} Emergency call-out</a></div>
-    <div class="hero-trust">${s.business.credentials.map((cr) => html`<span>${icon('check')}${cr}</span>`)}</div>
-  </div>
-  <div class="card card-glass telemetry" aria-label="Live availability">
+  const panel = s.site.heroPanel;
+  const telemetryCard = html`
+<div class="card card-glass telemetry" aria-label="Live availability">
     <div class="telemetry-head"><span class="mono">LIVE LAB TELEMETRY</span><span class="badge badge-good"><span class="dot dot-live"></span>Online</span></div>
     <svg class="gauge" viewBox="0 0 300 190" aria-hidden="true">
       <defs><linearGradient id="gArc" x1="0" x2="1"><stop offset="0" stop-color="#10b981"/><stop offset=".55" stop-color="#f5a524"/><stop offset="1" stop-color="#ff2e55"/></linearGradient></defs>
@@ -199,7 +193,24 @@ pageRoutes.get('/', async (c) => {
       <div class="readout"><small>Coverage</small><b>${Math.round(loc.max_miles)} mi radius</b></div>
       <div class="readout"><small>${rating.google || rating.count ? 'Rating' : 'Payment'}</small><b>${ratingText}</b></div>
     </div>
+  </div>`;
+  const wa = normPhone(s.business.whatsapp).replace('+', '');
+  const contactCard = html`<div class="card card-glass telemetry hero-contact" aria-label="Contact us">
+    <div class="telemetry-head"><span class="mono">TALK TO THE LAB</span><span class="badge badge-good"><span class="dot dot-live"></span>${nextLabel}</span></div>
+    <a class="btn btn-sos btn-block btn-lg" href="tel:${normPhone(s.business.phone)}">${icon('phone')} Call ${s.business.phone}</a>
+    <a class="btn btn-block btn-lg" href="https://wa.me/${wa}" target="_blank" rel="noopener">${icon('whatsapp')} WhatsApp a photo of the fault</a>
+    <a class="btn btn-primary btn-block btn-lg" href="/book">Book online ${icon('arrow')}</a>
+    <a class="hero-contact-link" href="/contact">${icon('help')} Questions? Use the contact &amp; help form</a>
+  </div>`;
+  const hero = html`<section class="hero grid-bg"><div class="wrap hero-grid${panel === 'none' ? ' hero-solo' : ''}">
+  <div>
+    <span class="eyebrow">${s.business.town} · ${s.business.region} · Mobile laboratory</span>
+    <h1 class="display">${headline[0]}${headline[1] ? html`<span class="line-accent">${headline[1]}</span>` : ''}</h1>
+    <p class="lead">${s.branding.heroSub}</p>
+    <div class="hero-ctas"><a class="btn btn-primary btn-lg" href="/book">Book a visit ${icon('arrow')}</a><a class="btn btn-sos btn-lg" href="/emergency">${icon('alert')} Emergency call-out</a></div>
+    <div class="hero-trust">${s.business.credentials.map((cr) => html`<span>${icon('check')}${cr}</span>`)}</div>
   </div>
+  ${panel === 'telemetry' ? telemetryCard : panel === 'contact' ? contactCard : ''}
 </div></section>`;
 
   const marqueeItems = [...s.business.credentials, rating.google ? `${rating.google.rating.toFixed(1)} ★ Google rating` : '', 'Dealer-level tooling', 'Written PDF reports', 'Live technician tracking', 'Fixed prices'].filter(Boolean);
@@ -261,15 +272,18 @@ pageRoutes.get('/', async (c) => {
   const faqSection = html`<section class="section"><div class="wrap wrap-narrow">${sectionHead('FAQ', 'Good questions')}${faq.html}<p style="margin-top:18px"><a class="accent" href="/faq">More answers →</a></p></div></section>`;
 
   const fleet = html`<section class="section-tight"><div class="wrap"><div class="card grid grid-2" style="align-items:center">
-  <div><span class="eyebrow">Fleet &amp; trade</span><h2 class="display" style="font-size:2.2rem">Keep your fleet earning</h2><p class="muted">Taxi firms, dealers, bodyshops and company fleets: multi-vehicle visits, agreed rates, one monthly invoice and your own branded booking portal.</p><a class="btn btn-primary" href="/fleet">Talk to us about your fleet ${icon('arrow')}</a></div>
+  <div><span class="eyebrow">Fleet &amp; trade</span><h2 class="display" style="font-size:2.2rem">Keep your fleet earning</h2><p class="muted">Taxi firms, dealers, bodyshops and company fleets: multi-vehicle visits, agreed rates, one monthly invoice and your own branded booking portal.</p><div class="row"><a class="btn btn-primary" href="/trade">Trade portal &amp; prices ${icon('arrow')}</a><a class="btn" href="/fleet">Fleet accounts</a></div></div>
   <div class="readouts"><div class="readout"><small>Vehicles per visit</small><b>Up to ${s.booking.maxVehicles}</b></div><div class="readout"><small>Multi-vehicle saving</small><b>${s.pricing.multiVehiclePct}% each</b></div><div class="readout"><small>Invoicing</small><b>Monthly</b></div><div class="readout"><small>Portal</small><b>Branded</b></div></div>
 </div></div></section>`;
 
+  const sectionsByKey: Record<HomeSection, SafeHtml | ''> = {
+    hero, marquee, services, stage, how, results, coverage, reviews: reviewsSection, lookup, guides: guidesSection, trade: fleet, faq: faqSection, cta: ctaBand(shell),
+  };
   return c.html(renderPage(c, shell, {
     title: `${s.business.name} — Mobile Diagnostics, Coding & Detailing in ${s.business.town}`,
     description: `${s.branding.heroSub}`.slice(0, 158),
     path: '/',
-    body: html`${hero}${marquee}${services}${stage}${how}${results}${coverage}${reviewsSection}${lookup}${guidesSection}${fleet}${faqSection}${ctaBand(shell)}`,
+    body: html`${siteSections(s.site).filter((x) => x.on).map((x) => sectionsByKey[x.key])}`,
     jsonLd: [faq.ld, { '@context': 'https://schema.org', '@type': 'WebSite', name: s.business.name, url: shell.origin, potentialAction: { '@type': 'SearchAction', target: `${shell.origin}/fault-codes?q={code}`, 'query-input': 'required name=code' } }],
   }));
 });
@@ -341,6 +355,14 @@ const noscript = (shell: Shell) => html`<noscript><div class="alert alert-warn">
 pageRoutes.get('/book', async (c) => {
   const shell = await loadShell(c);
   const bc = crumbs(shell, [['/book', 'Book a visit']]);
+  const maint = shell.settings.site.maintenance;
+  if (maint.on && !c.get('staff')) {
+    const b = shell.settings.business;
+    return c.html(renderPage(c, shell, {
+      title: 'Book a Visit', description: 'Booking is briefly paused — call or WhatsApp to book.', path: '/book', noindex: true,
+      body: html`<section class="section grid-bg"><div class="wrap wrap-narrow stack" style="text-align:center;align-items:center">${bc.html}<span class="eyebrow">Booking paused</span><h1 class="display">We'll book you in by phone</h1><p class="lead">${maint.message}</p><div class="row" style="justify-content:center"><a class="btn btn-sos btn-lg" href="tel:${normPhone(b.phone)}">${icon('phone')} Call ${b.phone}</a><a class="btn btn-lg" href="https://wa.me/${normPhone(b.whatsapp).replace('+', '')}" target="_blank" rel="noopener">${icon('whatsapp')} WhatsApp</a><a class="btn btn-lg" href="/contact">${icon('mail')} Send a message</a></div></div></section>`,
+    }));
+  }
   return c.html(renderPage(c, shell, {
     title: 'Book a Visit', description: 'Book mobile diagnostics, coding or detailing online. Live availability, instant confirmation and pay on completion.', path: '/book', scripts: ['book'], mobileBar: false,
     jsonLd: [bc.ld],

@@ -16,7 +16,7 @@ import { batteryCertificatePdf, checklistReportPdf, invoicePdf, jobReportPdf, pa
 
 export const documentRoutes = new Hono<AppEnv>();
 
-async function brand(c: Ctx, settings: Settings): Promise<PdfBrand> {
+export async function brand(c: Ctx, settings: Settings): Promise<PdfBrand> {
   const b = settings.business;
   let logo: PdfBrand['logo'] = null;
   if (settings.branding.logoMediaId) {

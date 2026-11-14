@@ -78,7 +78,8 @@ export async function dashboard(db: D1Database, settings: Settings, withFinance:
     all(db, 'SELECT id, name, stock, min_stock, unit FROM inventory WHERE stock <= min_stock ORDER BY (stock - min_stock) LIMIT 12'),
     all(db, 'SELECT id, name, expires_on, tokens_left FROM licences WHERE (expires_on IS NOT NULL AND expires_on <= ?) OR (tokens_left IS NOT NULL AND tokens_left <= 5) ORDER BY expires_on LIMIT 12', addDays(today, 45)),
   ]);
-  const base = { today, todayJobs, upcomingWeek: num(upcoming?.n), pending: num(pending?.n), unreadChats: num(unread?.n), lowStock, licences };
+  const channels = await all<{ channel: string; jobs: number }>(db, "SELECT channel, COUNT(*) AS jobs FROM bookings WHERE channel <> '' AND date >= ? AND status <> 'cancelled' GROUP BY channel ORDER BY jobs DESC LIMIT 8", addDays(today, -90));
+  const base = { today, todayJobs, upcomingWeek: num(upcoming?.n), pending: num(pending?.n), unreadChats: num(unread?.n), lowStock, licences, bookingPaused: settings.site.maintenance.on, channels };
   if (!withFinance) return base;
 
   const [mtd, mtdCosts, outstanding, newCustomers, weekly, monthly, topServices, byCategory, sources] = await Promise.all([

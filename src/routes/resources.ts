@@ -86,6 +86,10 @@ function coerce(f: Field, value: unknown, today: string): unknown {
       return JSON.stringify(arr.map((s) => String(s).trim().slice(0, 300)).filter(Boolean).slice(0, 60));
     }
     case 'multiselect': {
+      if (f.optionsFrom) {
+        const picked = (Array.isArray(value) ? value : []).map(String).filter((v) => /^[a-z0-9-]{1,60}$/.test(v));
+        return JSON.stringify([...new Set(picked)].slice(0, 20));
+      }
       const allowed = (f.options ?? []).map(optionValue);
       const arr = (Array.isArray(value) ? value : []).map(String).filter((v) => allowed.includes(v));
       return JSON.stringify(arr.length ? arr : def !== undefined ? [String(def)] : ['*']);
@@ -128,6 +132,7 @@ function coerce(f: Field, value: unknown, today: string): unknown {
     default: {
       let v = empty ? String(def ?? '') : String(value).trim();
       if (f.upper) v = v.toUpperCase();
+      if (f.key === 'slug') v = v.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
       if (!v && f.required) fail(422, `${label} is required.`, { [f.key]: 'Required.' });
       const max = f.type === 'markdown' ? 20000 : f.type === 'textarea' ? 4000 : 300;
       return v.slice(0, max);

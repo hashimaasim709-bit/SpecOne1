@@ -31,6 +31,8 @@ export interface NewBookingInput {
   loyaltyPoints: number;
   paymentMethod: string;
   fleetSlug: string;
+  /** Marketing channel (e.g. "flyer:winter-dpf", "trade", "qr"), when known. */
+  channel?: string;
   source: 'web' | 'phone' | 'walk_in' | 'subscription' | 'fleet' | 'admin';
   /** Extra free-form lines (admin quick-booker): labour, parts, custom work. */
   customItems?: { name: string; unitPrice: number; qty: number; kind: 'labour' | 'part' | 'custom' }[];
@@ -330,8 +332,8 @@ export async function createBooking(env: Env, settings: Settings, input: NewBook
     db,
     `INSERT INTO bookings (ref, access_token, customer_id, location_id, status, source, date, slot, slot_span, emergency, service_mode, address, postcode, lat, lng, distance_miles,
        currency, subtotal, discount, travel_fee, emergency_fee, peak_adjustment, loyalty_discount, total, quote_snapshot, deposit_due, payment_method, promo_code, referral_code,
-       partner_id, fleet_slug, subscription_id, assigned_user_id, customer_notes, internal_notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       partner_id, fleet_slug, subscription_id, assigned_user_id, customer_notes, internal_notes, channel)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ref, token, customer.id, loc.id, status, fleetSlug && input.source === 'web' ? 'fleet' : input.source, input.date, slot, span, emergency, input.serviceMode,
     mobile ? address : `Drop-off at ${loc.name}`, normPostcode(input.postcode), geo?.lat ?? null, geo?.lng ?? null, geo?.miles ?? 0,
     loc.currency, quote.subtotal + customSubtotal, discount, quote.travelFee, quote.emergencyFee, quote.peakAdjustment, quote.loyaltyDiscount, total,
@@ -340,6 +342,7 @@ export async function createBooking(env: Env, settings: Settings, input: NewBook
     // An unverified booking matched to an existing record keeps the record intact; note who actually booked.
     [!customer.created && !input.sessionCustomerId ? `Booked as: ${name} · ${normPhone(input.customer.phone)} · ${input.customer.email.trim().toLowerCase()}` : '', input.internalNotes ?? '']
       .filter(Boolean).join('\n').slice(0, 4000),
+    (input.channel ?? '').toLowerCase().replace(/[^a-z0-9:_-]/g, '').slice(0, 60),
   );
 
   // Two people racing for the last slot: the later insert backs out — before any side effects run.

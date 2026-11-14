@@ -16,6 +16,7 @@ import { pushOwner } from '../services/notify';
 import { createCheckout, paymentsEnabled } from '../services/payments';
 import { analyseReview } from '../services/sentiment';
 import { emit } from '../services/webhooks';
+import { decideEstimate, estimateOut, type EstimateRow } from './ops';
 
 export const trackRoutes = new Hono<AppEnv>();
 
@@ -31,7 +32,7 @@ trackRoutes.get('/:token', async (c) => {
   const b = await bookingFromToken(c);
   const db = c.env.DB;
   const settings = await getSettings(db);
-  const [vehicles, items, events, tech, van, docs] = await Promise.all([
+  const [vehicles, items, events, tech, van, docs, estimates] = await Promise.all([
     bookingVehicles(db, b.id),
     bookingItems(db, b.id),
     all<{ type: string; detail: string; created_at: string }>(db, 'SELECT type, detail, created_at FROM booking_events WHERE booking_id = ? AND public = 1 ORDER BY id', b.id),
@@ -41,6 +42,7 @@ trackRoutes.get('/:token', async (c) => {
       all<{ id: number }>(db, 'SELECT id FROM battery_tests WHERE booking_id = ?', b.id),
       all<{ id: number; kind: string }>(db, "SELECT id, kind FROM checklist_runs WHERE booking_id = ? AND status = 'completed' AND kind IN ('vhc','ppi')", b.id),
     ]),
+    all<EstimateRow>(db, "SELECT * FROM estimates WHERE booking_id = ? AND status != 'withdrawn' ORDER BY id DESC", b.id),
   ]);
   const showVan = (b.status === 'en_route' || b.status === 'arrived') && van?.lat != null && van.position_at && Date.now() - Date.parse(van.position_at) < 30 * 60_000;
   const t = encodeURIComponent(b.access_token);
@@ -72,6 +74,7 @@ trackRoutes.get('/:token', async (c) => {
     documents,
     reviewUrl: settings.business.googleReviewUrl,
     business: { name: settings.business.name, phone: settings.business.phone, whatsapp: settings.business.whatsapp },
+    estimates: estimates.map((e) => { const o = estimateOut(e); return { id: o.id, title: o.title, note: o.note, items: o.items, total: o.total, status: o.status as 'pending' | 'approved' | 'declined', decidedAt: o.decidedAt, createdAt: o.createdAt }; }),
   };
   return c.json(payload);
 });
@@ -126,4 +129,15 @@ trackRoutes.post('/:token/feedback', async (c) => {
   })());
   const settings = await getSettings(db);
   return c.json({ ok: true, reviewUrl: input.rating >= 4 ? settings.business.googleReviewUrl : '' });
+});
+
+trackRoutes.post('/:token/estimates/:id', async (c) => {
+  await rateLimit(c, 'estimate', 10, 3600);
+  const b = await bookingFromToken(c);
+  const input = await readJson(c, z.object({ decision: z.enum(['approve', 'decline']), name: z.string().trim().max(80).default(''), note: z.string().trim().max(500).default('') }));
+  const customer = await first<{ name: string }>(c.env.DB, 'SELECT name FROM customers WHERE id = ?', b.customer_id);
+  const name = input.name || customer?.name || 'Customer';
+  const { total } = await decideEstimate(c, b.id, Number(c.req.param('id')), input.decision, name, input.note);
+  await audit(c, input.decision, 'estimate', c.req.param('id') ?? '', `${name} ${input.decision === 'approve' ? 'approved' : 'declined'} an estimate on ${b.ref}`, {}, { type: 'customer', id: b.customer_id, name });
+  return c.json({ ok: true, total });
 });

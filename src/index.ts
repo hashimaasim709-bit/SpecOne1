@@ -10,6 +10,8 @@ import { accountRoutes } from './routes/account';
 import { adminRoutes } from './routes/admin';
 import { authRoutes } from './routes/auth';
 import { documentRoutes } from './routes/documents';
+import { marketingRoutes } from './routes/marketing';
+import { opsRoutes } from './routes/ops';
 import { pageRoutes, renderErrorPage } from './routes/pages';
 import { publicRoutes } from './routes/public';
 import { resourceRoutes } from './routes/resources';
@@ -55,8 +57,10 @@ app.route('/api/track', trackRoutes);
 app.route('/api/account', accountRoutes);
 app.route('/api/staff/auth', authRoutes);
 app.route('/api/admin', adminRoutes);
+app.route('/api/admin', opsRoutes);
 app.route('/api/admin/r', resourceRoutes);
 app.route('/', documentRoutes);
+app.route('/', marketingRoutes);
 app.route('/', pageRoutes);
 
 // ── Errors: graceful JSON for the API, a branded page for browsers — never a white screen. ──

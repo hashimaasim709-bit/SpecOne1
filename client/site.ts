@@ -13,6 +13,7 @@ interface SiteConfig {
   pixel: string;
   business: string;
   turnstile?: string;
+  installPrompt?: boolean;
 }
 const cfg = readConfig<SiteConfig>();
 
@@ -240,14 +241,60 @@ $$<HTMLFormElement>('[data-enquiry-form]').forEach((form) =>
     const data = Object.fromEntries(new FormData(form).entries()) as Record<string, string>;
     btn.disabled = true;
     try {
-      await api('/api/public/enquiry', { body: { ...data, kind: form.dataset.kind ?? 'general', turnstileToken: turnstileToken(form) } });
+      await api(form.dataset.endpoint ?? '/api/public/enquiry', { body: { ...data, kind: form.dataset.kind ?? 'general', turnstileToken: turnstileToken(form) } });
       form.reset();
-      out.innerHTML = '<div class="alert alert-good"><span>Thanks — we have your enquiry and will be in touch shortly.</span></div>';
+      $$('.chip[aria-pressed="true"]', form).forEach((c) => c.setAttribute('aria-pressed', 'false'));
+      out.innerHTML = `<div class="alert alert-good"><span>${esc(form.dataset.success ?? 'Thanks — we have your enquiry and will be in touch shortly.')}</span></div>`;
+      out.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     } catch (err) {
       out.innerHTML = `<div class="alert alert-bad"><span>${esc(errorMessage(err))}</span></div>`;
     } finally {
       btn.disabled = false;
     }
+  }),
+);
+
+// Quick-help chips on the contact form: one tap fills the topic and starts the message.
+$$<HTMLButtonElement>('[data-prefill]').forEach((chip) =>
+  chip.addEventListener('click', () => {
+    const form = chip.closest('form');
+    if (!form) return;
+    const topic = $<HTMLSelectElement>('select[name=topic]', form);
+    const msg = $<HTMLTextAreaElement>('textarea[name=message]', form);
+    if (topic && chip.dataset.topic) topic.value = chip.dataset.topic;
+    if (msg) {
+      msg.value = chip.dataset.prefill ?? '';
+      msg.focus();
+      msg.setSelectionRange(msg.value.length, msg.value.length);
+    }
+    $$('[data-prefill]', form).forEach((c) => c.setAttribute('aria-pressed', c === chip ? 'true' : 'false'));
+  }),
+);
+
+// Share buttons (rate card, flyers): native share sheet, falling back to copying the link.
+$$<HTMLButtonElement>('[data-share]').forEach((btn) =>
+  btn.addEventListener('click', async () => {
+    const url = btn.dataset.share || location.href;
+    const title = btn.dataset.title || document.title;
+    try {
+      if (navigator.share) await navigator.share({ title, url });
+      else {
+        await navigator.clipboard.writeText(url);
+        toast('Link copied');
+      }
+    } catch {
+      /* share sheet closed */
+    }
+  }),
+);
+$$<HTMLButtonElement>('[data-print]').forEach((btn) => btn.addEventListener('click', () => window.print()));
+
+// Trade portal: unlock trade prices in the booking form with a trade code.
+$$<HTMLFormElement>('[data-trade-code]').forEach((form) =>
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const code = String(new FormData(form).get('code') ?? '').trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
+    if (code) location.href = `/book?promo=${encodeURIComponent(code)}&src=trade`;
   }),
 );
 
@@ -412,7 +459,7 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 const install = $('[data-install]');
 let deferred: (Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> }) | null = null;
 const standalone = matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone;
-const snoozed = Number(store.get('s1-install-snooze') ?? 0) > Date.now();
+const snoozed = cfg.installPrompt === false || Number(store.get('s1-install-snooze') ?? 0) > Date.now();
 const visits = Number(store.get('s1-visits') ?? 0) + 1;
 store.set('s1-visits', String(visits));
 window.addEventListener('beforeinstallprompt', (e) => {

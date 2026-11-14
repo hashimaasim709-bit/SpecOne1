@@ -2,7 +2,7 @@
 // specific permission (see ROLE_PERMISSIONS). All changes are written to the audit trail.
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { BODIES, BOOKING_STATUSES, can, ROLE_PERMISSIONS, ROLES, SLOT_ORDER, slotLabel, type BookingStatus } from '../../shared/constants';
+import { ACCENTS, BODIES, BOOKING_STATUSES, can, HERO_PANELS, ROLE_PERMISSIONS, ROLES, SLOT_ORDER, slotLabel, type BookingStatus } from '../../shared/constants';
 import { addDays, displayPhone, formatDate, formatReg, isIsoDate, normPhone, normReg, todayIn } from '../../shared/format';
 import type { AppEnv, Ctx } from '../env';
 import { originOf } from '../env';
@@ -11,7 +11,7 @@ import { hashPassword, passwordProblem, randomToken } from '../lib/crypto';
 import { all, first, likeTerm, nowIso, parseJson, run } from '../lib/db';
 import { download, intParam, intQuery, noStore, readJson, readUpload } from '../lib/http';
 import { fail, rateLimit } from '../lib/security';
-import { DEFAULT_SETTINGS, getSettings, saveSetting, setFlag, SETTINGS_KEYS, type Settings, type SettingsKey } from '../lib/settings';
+import { DEFAULT_SETTINGS, getSettings, saveSetting, setFlag, SETTINGS_KEYS, siteSections, type Settings, type SettingsKey } from '../lib/settings';
 import { exportDatabase, readBackup, runBackup, toCsv } from '../services/backup';
 import {
   addEvent, bookingItems, bookingVehicles, createBooking, getBooking, recalcTotals, setStatus, upsertCustomer, upsertVehicle,
@@ -821,6 +821,13 @@ adminRoutes.put('/settings/:key', async (c) => {
     const b = clean as Settings['business'];
     if (b.slotsByWeekday.length !== 7) fail(422, 'Opening windows need an entry for each day of the week.');
     b.slotsByWeekday = b.slotsByWeekday.map((d) => (Array.isArray(d) ? d.filter((s) => (SLOT_ORDER as string[]).includes(s)) : []));
+  }
+  if (key === 'site') {
+    const site = clean as Settings['site'];
+    if (!(site.accent in ACCENTS)) site.accent = 'crimson';
+    if (!HERO_PANELS.some(([k]) => k === site.heroPanel)) site.heroPanel = 'telemetry';
+    site.sections = siteSections(site);
+    site.maintenance.message = site.maintenance.message.trim().slice(0, 300) || DEFAULT_SETTINGS.site.maintenance.message;
   }
   await saveSetting(c.env.DB, key, clean);
   await audit(c, 'update', 'settings', key, `Updated ${key} settings`, diff(flatten(before), flatten(clean)));

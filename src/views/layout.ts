@@ -74,13 +74,18 @@ export interface PageOptions {
   image?: string;
 }
 
-const NAV: [string, string][] = [
-  ['/services', 'Services'],
-  ['/coverage', 'Coverage'],
-  ['/fault-codes', 'Fault codes'],
-  ['/gallery', 'Lab gallery'],
-  ['/fleet', 'Fleet & trade'],
-];
+/** Main navigation, shaped by the website studio switches. */
+function navItems(s: Settings): [string, string][] {
+  const f = s.site.features;
+  return [
+    ['/services', 'Services'],
+    ...(f.rateCardInNav ? [['/rate-card', 'Prices'] as [string, string]] : []),
+    ['/coverage', 'Coverage'],
+    ['/fault-codes', 'Fault codes'],
+    f.tradeInNav ? ['/trade', 'Trade'] : ['/fleet', 'Fleet'],
+    ['/contact', 'Contact'],
+  ];
+}
 
 export function brandMark(shell: Shell): SafeHtml {
   const name = shell.settings.business.name;
@@ -120,9 +125,12 @@ export function renderPage(c: Ctx, shell: Shell, o: PageOptions): string {
   const canonical = `${shell.origin}${o.path === '/' ? '' : o.path}`;
   const title = o.title.includes(b.name) ? o.title : `${o.title} · ${b.name}`;
   const wa = normPhone(b.whatsapp).replace('+', '');
-  const emergency = o.hideBanners ? null : shell.banners.find((x) => x.kind === 'emergency');
+  const f = s.site.features;
+  const NAV = navItems(s);
+  const emergency = o.hideBanners || !f.emergencyStrip ? null : shell.banners.find((x) => x.kind === 'emergency');
   const promo = o.hideBanners ? null : shell.banners.find((x) => x.kind === 'seasonal') ?? shell.banners.find((x) => x.kind === 'promo' || x.kind === 'notice');
-  const mobileBar = o.mobileBar !== false;
+  const mobileBar = o.mobileBar !== false && f.mobileBar;
+  const maintenance = s.site.maintenance.on ? s.site.maintenance.message : '';
   const client = {
     buildId: BUILD_ID,
     phone: b.phone,
@@ -133,11 +141,12 @@ export function renderPage(c: Ctx, shell: Shell, o: PageOptions): string {
     pixel: s.integrations.metaPixelId,
     business: b.name,
     turnstile: c.env.TURNSTILE_SITE_KEY ?? '',
+    installPrompt: f.installPrompt,
     ...(o.data ?? {}),
   };
   const ld = [localBusinessLd(shell), ...(o.jsonLd ?? [])];
 
-  return '<!doctype html>' + html`<html lang="en-GB" data-theme="${s.branding.themeDefault}">
+  return '<!doctype html>' + html`<html lang="en-GB" data-theme="${s.branding.themeDefault}" data-accent="${s.site.accent}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -168,6 +177,7 @@ ${ld.map((d) => html`<script type="application/ld+json" nonce="${nonce}">${jsonF
 </head>
 <body class="${[mobileBar ? 'has-mobile-bar' : '', o.bodyClass ?? ''].join(' ').trim()}">
 <a class="sr-only" href="#main">Skip to content</a>
+${maintenance ? html`<div class="strip strip-notice" role="status"><div class="wrap">${icon('info')}<span>${maintenance}</span><a href="tel:${normPhone(b.phone)}">Call ${b.phone}</a></div></div>` : ''}
 ${emergency ? html`<div class="strip strip-sos" role="region" aria-label="Emergency hotline"><div class="wrap"><span class="flash" aria-hidden="true"></span><span><b class="strip-title">${emergency.title}</b><b class="strip-short">Emergency?</b> <span class="strip-msg">${emergency.message}</span></span><a href="tel:${normPhone(b.phone)}">Call ${b.phone}</a></div></div>` : ''}
 ${promo ? html`<div class="strip strip-promo" data-banner="${promo.id}" hidden><div class="wrap"><span><b>${promo.title}</b>${promo.message ? html`<span class="strip-msg"> — ${promo.message}</span>` : ''}</span>${promo.promo_code ? html`<span class="code">${promo.promo_code}</span>` : ''}${promo.cta_href ? html`<a href="${promo.cta_href.startsWith('tel:') ? `tel:${normPhone(b.phone)}` : promo.cta_href}"><span class="strip-cta">${promo.cta_label || 'Find out more'} </span>→</a>` : ''}</div><button class="strip-close" type="button" aria-label="Dismiss">${icon('x')}</button></div>` : ''}
 <header class="nav">
@@ -186,7 +196,7 @@ ${promo ? html`<div class="strip strip-promo" data-banner="${promo.id}" hidden><
   <div class="sheet-backdrop" data-menu-close></div>
   <div class="sheet-panel" role="dialog" aria-label="Menu">
     <div class="spread" style="margin-bottom:10px">${brandMark(shell)}<button class="btn btn-ghost btn-icon" type="button" data-menu-close aria-label="Close menu">${icon('x')}</button></div>
-    ${[['/book', 'Book a visit'], ...NAV, ['/emergency', 'Emergency call-out'], ['/reviews', 'Reviews'], ['/guides', 'Guides'], ['/faq', 'FAQ'], ['/account', 'My garage']].map(([href, label]) => html`<a class="sheet-link" href="${href}">${label}${icon('arrow')}</a>`)}
+    ${[['/book', 'Book a visit'], ...NAV.filter(([href]) => href !== '/contact'), ['/gallery', 'Lab gallery'], ['/emergency', 'Emergency call-out'], ...(f.tradeInNav ? [] : [['/trade', 'Trade portal']]), ...(f.rateCardInNav ? [] : [['/rate-card', 'Price list']]), ['/reviews', 'Reviews'], ['/guides', 'Guides'], ['/faq', 'FAQ'], ['/contact', 'Contact & help'], ['/account', 'My garage']].map(([href, label]) => html`<a class="sheet-link" href="${href}">${label}${icon('arrow')}</a>`)}
     <div style="margin-top:auto;display:grid;gap:10px;padding-top:16px">
       <a class="btn btn-sos btn-block" href="tel:${normPhone(b.phone)}">${icon('phone')} Call ${b.phone}</a>
       <a class="btn btn-block" href="https://wa.me/${wa}" rel="noopener" target="_blank">${icon('whatsapp')} WhatsApp us</a>
@@ -197,7 +207,7 @@ ${promo ? html`<div class="strip strip-promo" data-banner="${promo.id}" hidden><
 ${renderFooter(shell)}
 <div class="fab-stack">
   ${s.integrations.chat ? html`<button class="fab fab-chat" type="button" data-chat-open aria-label="Live chat">${icon('chat')}<span class="unread" data-chat-unread hidden>1</span></button>` : ''}
-  <a class="fab fab-wa" href="https://wa.me/${wa}?text=${encodeURIComponent(`Hi ${b.name}, `)}" target="_blank" rel="noopener" aria-label="Chat on WhatsApp">${icon('whatsapp')}</a>
+  ${f.whatsappButton ? html`<a class="fab fab-wa" href="https://wa.me/${wa}?text=${encodeURIComponent(`Hi ${b.name}, `)}" target="_blank" rel="noopener" aria-label="Chat on WhatsApp">${icon('whatsapp')}</a>` : ''}
 </div>
 ${mobileBar ? html`<nav class="mobile-bar" aria-label="Quick actions"><a class="btn" href="tel:${normPhone(b.phone)}">${icon('phone')} Call</a><a class="btn" href="https://wa.me/${wa}" target="_blank" rel="noopener">${icon('whatsapp')} WhatsApp</a><a class="btn btn-primary" href="/book">Book now</a></nav>` : ''}
 <div class="toast-host" aria-live="polite"></div>
@@ -246,7 +256,7 @@ function renderFooter(shell: Shell): SafeHtml {
       </div>
       <div>
         <h4>Services</h4>
-        <ul><li><a href="/services#diagnostics">Diagnostics &amp; coding</a></li><li><a href="/services#detailing">Detailing &amp; ceramic</a></li><li><a href="/services#plans">Maintenance plans</a></li><li><a href="/fleet">Fleet &amp; trade</a></li><li><a href="/emergency">Emergency call-out</a></li><li><a href="/coding">Coding matrix</a></li><li><a href="/fault-codes">Fault code library</a></li></ul>
+        <ul><li><a href="/services#diagnostics">Diagnostics &amp; coding</a></li><li><a href="/services#detailing">Detailing &amp; ceramic</a></li><li><a href="/services#plans">Maintenance plans</a></li><li><a href="/rate-card">Full price list</a></li><li><a href="/trade">Trade portal</a></li><li><a href="/fleet">Fleet accounts</a></li><li><a href="/emergency">Emergency call-out</a></li><li><a href="/coding">Coding matrix</a></li><li><a href="/fault-codes">Fault code library</a></li></ul>
       </div>
       <div>
         <h4>Areas</h4>
@@ -258,6 +268,7 @@ function renderFooter(shell: Shell): SafeHtml {
           <li><a href="tel:${normPhone(b.phone)}" class="mono">${displayPhone(b.phone)}</a></li>
           <li><a href="mailto:${b.email}">${b.email}</a></li>
           ${b.hours.map((h) => html`<li class="muted">${h.days}<br><span class="mono">${h.open}–${h.close}</span></li>`)}
+          <li><a href="/contact">Contact &amp; help</a></li>
           <li><a href="/account">My garage &amp; reports</a></li>
         </ul>
       </div>

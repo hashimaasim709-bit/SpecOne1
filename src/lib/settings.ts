@@ -1,5 +1,6 @@
 // Business configuration lives in the `settings` table as JSON documents, merged over
 // these defaults. Everything here is editable from Admin → Settings.
+import { HOME_SECTIONS, type AccentKey, type HomeSection } from '../../shared/constants';
 import type { TaxSettings } from '../../shared/pricing';
 import type { BusinessSettings, PricingSettings } from '../../shared/types';
 import { all, parseJson, stmt } from './db';
@@ -37,6 +38,21 @@ export interface Settings {
   };
   tax: TaxSettings & { setAsideNote: string };
   security: { autoLockMinutes: number; sessionDays: number };
+  /** Website studio: what the public site shows and how it looks. */
+  site: {
+    accent: AccentKey;
+    heroPanel: 'telemetry' | 'contact' | 'none';
+    sections: { key: HomeSection; on: boolean }[];
+    features: {
+      whatsappButton: boolean;
+      mobileBar: boolean;
+      emergencyStrip: boolean;
+      installPrompt: boolean;
+      tradeInNav: boolean;
+      rateCardInNav: boolean;
+    };
+    maintenance: { on: boolean; message: string };
+  };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -87,6 +103,7 @@ export const DEFAULT_SETTINGS: Settings = {
       { key: 'out_of_hours', label: 'Out-of-hours / emergency labour', rate: 13000 },
     ],
     vat: { registered: false, rate: 20, number: '' },
+    tradeDiscountPct: 25,
   },
   booking: {
     autoConfirm: true,
@@ -123,6 +140,13 @@ export const DEFAULT_SETTINGS: Settings = {
     setAsideNote: 'Estimate only: sole-trader income tax and Class 4 National Insurance on profit. Confirm rates and allowances with your accountant.',
   },
   security: { autoLockMinutes: 5, sessionDays: 14 },
+  site: {
+    accent: 'crimson',
+    heroPanel: 'telemetry',
+    sections: HOME_SECTIONS.map(([key]) => ({ key, on: true })),
+    features: { whatsappButton: true, mobileBar: true, emergencyStrip: true, installPrompt: true, tradeInNav: true, rateCardInNav: true },
+    maintenance: { on: false, message: 'Online booking is paused for a moment while we update the site. Please call or WhatsApp us and we will book you in straight away.' },
+  },
 };
 
 export type SettingsKey = keyof Settings;
@@ -166,3 +190,23 @@ export async function setFlag(db: D1Database, key: string, value: string): Promi
 export const invalidateSettings = (): void => {
   cache = null;
 };
+
+const SECTION_KEYS = HOME_SECTIONS.map(([k]) => k) as HomeSection[];
+
+/**
+ * Homepage sections in the saved order, with unknown keys dropped and any section added in a
+ * later release appended (switched on). The hero is always first and always shown.
+ */
+export function siteSections(site: Settings['site']): { key: HomeSection; on: boolean }[] {
+  const seen = new Set<HomeSection>();
+  const out: { key: HomeSection; on: boolean }[] = [];
+  for (const s of Array.isArray(site.sections) ? site.sections : []) {
+    if (!s || !SECTION_KEYS.includes(s.key) || seen.has(s.key)) continue;
+    seen.add(s.key);
+    out.push({ key: s.key, on: s.key === 'hero' || s.on !== false });
+  }
+  for (const key of SECTION_KEYS) if (!seen.has(key)) out.push({ key, on: true });
+  const hero = out.findIndex((s) => s.key === 'hero');
+  if (hero > 0) out.unshift(...out.splice(hero, 1));
+  return out;
+}

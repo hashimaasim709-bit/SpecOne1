@@ -133,6 +133,17 @@ function Calendar({ month, setMonth, days, selected, onSelect, span, today }: { 
   );
 }
 
+/** Where this visitor came from (?src=flyer:slug, trade, qr…), remembered for the session. */
+function bookingChannel(): string {
+  try {
+    const src = new URLSearchParams(location.search).get('src');
+    if (src) sessionStorage.setItem('s1-channel', src.slice(0, 60));
+    return sessionStorage.getItem('s1-channel') ?? '';
+  } catch {
+    return '';
+  }
+}
+
 function App({ cfg, fleetSlug }: { cfg: BookingConfig; fleetSlug: string }) {
   const [s, setS] = useState<State>(loadInitial);
   const set = (patch: Partial<State> | ((prev: State) => Partial<State>)) => setS((prev) => ({ ...prev, ...(typeof patch === 'function' ? patch(prev) : patch) }));
@@ -383,7 +394,7 @@ function App({ cfg, fleetSlug }: { cfg: BookingConfig; fleetSlug: string }) {
       vehicles: s.vehicles.map((x) => ({ reg: x.reg, make: x.make, model: x.model, year: x.year, fuel: x.fuel, colour: x.colour, size: x.size, body: x.body, packageIds: x.packageIds })),
       date: s.emergency ? today : s.date!, slot: s.emergency ? 'asap' : s.slot!, emergency: s.emergency, serviceMode: s.serviceMode, address: s.address, postcode: s.geo?.postcode ?? s.postcode,
       customer: { name: s.name, email: s.email, phone: s.phone, marketing: s.marketing }, notes: s.notes, symptoms: s.symptoms, photoIds: s.photos.map((p) => p.id),
-      promoCode: s.promoInput, loyaltyPoints, paymentMethod: s.paymentMethod, payDeposit: s.payDeposit, utilitiesConfirmed: s.utilities, fleetSlug,
+      promoCode: s.promoInput, loyaltyPoints, paymentMethod: s.paymentMethod, payDeposit: s.payDeposit, utilitiesConfirmed: s.utilities, fleetSlug, channel: bookingChannel(),
       turnstileToken: turnstileId.current && w.turnstile ? w.turnstile.getResponse(turnstileId.current) ?? '' : '', website: (document.getElementById('bk-website') as HTMLInputElement | null)?.value ?? '',
     };
     setBusy(true);

@@ -7,11 +7,14 @@ import { get, send } from '../api';
 import { ComboChart, HBars, type Point } from '../charts';
 import { can, go, type Me } from '../main';
 import { Empty, Icon, PageTitle, Stale, StatusBadge, useAction } from '../ui';
+import { ControlDeck, TradeApplications } from './controls';
 
 interface Job { id: number; ref: string; status: BookingStatus; slot: string; emergency: number; address: string; postcode: string; total: number; customer_name: string; customer_phone: string; vehicles: string | null }
 interface Dash {
   today: string; todayJobs: Job[]; upcomingWeek: number; pending: number; unreadChats: number;
   lowStock: { id: number; name: string; stock: number; min_stock: number; unit: string }[];
+  bookingPaused?: boolean;
+  channels?: { channel: string; jobs: number }[];
   licences: { id: number; name: string; expires_on: string | null; tokens_left: number | null }[];
   kpis?: { revenueMtd: number; costsMtd: number; profitMtd: number; jobsMtd: number; avgJob: number; outstanding: number; outstandingJobs: number; newCustomers: number };
   weekly?: Point[]; monthly?: Point[];
@@ -26,8 +29,9 @@ const CAT: Record<string, string> = { diagnostics: 'Diagnostics & coding', detai
 export function DashboardView({ me }: { me: Me }) {
   const [d, setD] = useState<{ data: Dash; stale: boolean; at: number } | null>(null);
   const [range, setRange] = useState<'weekly' | 'monthly'>('weekly');
+  const reload = () => get<Dash>('/dashboard').then(setD).catch(() => undefined);
   useEffect(() => {
-    get<Dash>('/dashboard').then(setD).catch(() => undefined);
+    void reload();
   }, []);
   if (!d) return <div class="stack"><div class="skeleton" style="height:40px;width:40%" /><div class="stats">{[1, 2, 3, 4].map(() => <div class="skeleton" style="height:96px" />)}</div><div class="skeleton" style="height:300px" /></div>;
   const x = d.data;
@@ -40,6 +44,7 @@ export function DashboardView({ me }: { me: Me }) {
         <a class="btn" href="#/today"><Icon name="route" /> Today's run</a>
       </PageTitle>
       <Stale stale={d.stale} at={d.at} />
+      {x.bookingPaused && <div class="alert alert-warn"><Icon name="lock" /><span>Online booking is paused — customers are asked to call or WhatsApp. Resume it from the controls below.</span></div>}
       <div class="stats">
         <div class="stat accent"><small>Jobs today</small><b>{x.todayJobs.length}</b><span>{x.upcomingWeek} more this week</span></div>
         <a class="stat" href="#/bookings?status=pending" style="text-decoration:none"><small>Awaiting confirmation</small><b>{x.pending}</b><span>{x.pending ? 'Tap to review' : 'All confirmed'}</span></a>
@@ -49,6 +54,8 @@ export function DashboardView({ me }: { me: Me }) {
         {k && <a class="stat" href="#/bookings?status=completed&unpaid=1" style="text-decoration:none"><small>Outstanding</small><b>{money(k.outstanding, CUR)}</b><span>{k.outstandingJobs} unpaid job{k.outstandingJobs === 1 ? '' : 's'}</span></a>}
       </div>
 
+      <TradeApplications me={me} />
+      <ControlDeck me={me} paused={can(me, 'settings.write') ? !!x.bookingPaused : null} onDone={() => void reload()} />
       <div class="cols">
         <div class="panel">
           <div class="panel-head"><h3>Today</h3><a class="btn btn-sm btn-ghost" href="#/calendar">Calendar <Icon name="arrow" /></a></div>
@@ -77,7 +84,9 @@ export function DashboardView({ me }: { me: Me }) {
       {x.topServices && (
         <div class="cols">
           <div class="panel"><div class="panel-head"><h3>Top services</h3><span class="faint mono" style="font-size:.7rem">LAST 90 DAYS</span></div><HBars currency={CUR} rows={x.topServices.map((s) => ({ label: s.name, value: s.revenue, sub: `${s.jobs} job${s.jobs === 1 ? '' : 's'}` }))} /></div>
-          <div class="panel"><div class="panel-head"><h3>Where bookings come from</h3><span class="faint mono" style="font-size:.7rem">LAST 90 DAYS</span></div><HBars rows={(x.sources ?? []).map((s) => ({ label: s.source.replace('_', '-'), value: s.jobs }))} format={(v) => `${v} job${v === 1 ? '' : 's'}`} /></div>
+          <div class="panel"><div class="panel-head"><h3>Where bookings come from</h3><span class="faint mono" style="font-size:.7rem">LAST 90 DAYS</span></div><HBars rows={(x.sources ?? []).map((s) => ({ label: s.source.replace('_', '-'), value: s.jobs }))} format={(v) => `${v} job${v === 1 ? '' : 's'}`} />
+            {(x.channels ?? []).length > 0 && <><div class="panel-head" style="margin-top:14px"><h3>Flyers &amp; campaigns</h3></div><HBars rows={x.channels!.map((ch) => ({ label: ch.channel.replace(/^flyer:/, 'Flyer: ').replace(/^rate-card(-pdf)?$/, 'Price list').replace(/^trade$/, 'Trade portal'), value: ch.jobs }))} format={(v) => `${v} booking${v === 1 ? '' : 's'}`} /></>}
+          </div>
         </div>
       )}
     </div>

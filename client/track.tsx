@@ -99,6 +99,50 @@ function Feedback({ data }: { data: TrackPayload }) {
   );
 }
 
+/** Extra work found on the job, waiting for the customer's OK (or already decided). */
+function Estimates({ data, onDecided }: { data: TrackPayload; onDecided: () => void }) {
+  const [busy, setBusy] = useState(0);
+  const [note, setNote] = useState<Record<number, string>>({});
+  if (!data.estimates?.length) return null;
+  const cur = data.currency;
+  const decide = async (id: number, decision: 'approve' | 'decline') => {
+    if (decision === 'decline' && !confirm('Decline this work? The technician will carry on with the original job only.')) return;
+    setBusy(id);
+    try {
+      await api(`/api/track/${token}/estimates/${id}`, { body: { decision, note: note[id] ?? '' } });
+      toast(decision === 'approve' ? 'Approved — the technician has been told and will carry on.' : 'Declined — the technician has been told.', { title: decision === 'approve' ? 'Approved' : 'Declined' });
+      onDecided();
+    } catch (e) {
+      toast(errorMessage(e), { icon: 'alert' });
+    } finally {
+      setBusy(0);
+    }
+  };
+  return (
+    <div class="stack" id={data.estimates.some((e) => e.status === 'pending') ? 'estimates' : undefined} style="gap:12px">
+      {data.estimates.map((e) => (
+        <div class={`card stack estimate estimate-${e.status}`} style="gap:10px">
+          <div class="spread"><span class="eyebrow" style="margin:0">{e.status === 'pending' ? 'Your approval needed' : 'Estimate'}</span><span class={`badge badge-${e.status === 'approved' ? 'good' : e.status === 'declined' ? 'bad' : 'accent'}`}>{e.status}</span></div>
+          <h3 style="margin:0">{e.title}</h3>
+          {e.note && <p class="muted" style="margin:0;white-space:pre-line">{e.note}</p>}
+          {e.items.map((it) => <div class="summary-line"><span>{it.qty !== 1 ? `${it.name} × ${it.qty}` : it.name}</span><span>{money(Math.round(it.qty * it.unitPrice), cur)}</span></div>)}
+          <div class="summary-total"><span class="muted">Estimate</span><b style="font-size:1.3rem">{money(e.total, cur)}</b></div>
+          {e.status === 'pending' ? (
+            <>
+              <input class="input" placeholder="Add a note for the technician (optional)" maxLength={500} value={note[e.id] ?? ''} onInput={(ev) => setNote({ ...note, [e.id]: (ev.target as HTMLInputElement).value })} />
+              <div class="row" style="flex-wrap:nowrap">
+                <button type="button" class="btn btn-primary" style="flex:1" disabled={busy === e.id} onClick={() => decide(e.id, 'approve')}>Approve {money(e.total, cur)}</button>
+                <button type="button" class="btn" disabled={busy === e.id} onClick={() => decide(e.id, 'decline')}>Decline</button>
+              </div>
+              <p class="faint" style="margin:0;font-size:.8rem">Approving adds this work to your invoice. Questions first? Call {data.business.phone}.</p>
+            </>
+          ) : e.decidedAt && <p class="faint" style="margin:0;font-size:.82rem">{e.status === 'approved' ? 'Approved' : 'Declined'} {formatDateTime(e.decidedAt)}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function App() {
   const [data, setData] = useState<TrackPayload | null>(null);
   const [error, setError] = useState('');
@@ -148,6 +192,7 @@ function App() {
 
       <div class="track-layout">
         <div class="stack">
+          {data.estimates?.some((e) => e.status === 'pending') && <Estimates data={{ ...data, estimates: data.estimates.filter((e) => e.status === 'pending') }} onDecided={() => void load()} />}
           {data.status === 'en_route' && (
             <div class="card card-glass eta">
               <span style="color:var(--accent-hi)"><Svg d={P.van} size={42} /></span>
@@ -174,6 +219,7 @@ function App() {
               </ol>
             )}
           </div>
+          {data.estimates?.some((e) => e.status !== 'pending') && <Estimates data={{ ...data, estimates: data.estimates.filter((e) => e.status !== 'pending') }} onDecided={() => void load()} />}
           {data.status === 'completed' && <Feedback data={data} />}
         </div>
 
