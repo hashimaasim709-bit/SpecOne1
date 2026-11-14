@@ -1,21 +1,86 @@
 // Import customers, vehicles and bookings from the previous SpecOne system.
 //
-// 1. On the OLD site, open /api/admin/cloud-backup while signed in and save the JSON file.
-// 2. node scripts/import-legacy.mjs specone-cloud-d1-backup.json legacy-import.sql
-// 3. npx wrangler d1 execute DB --remote --file legacy-import.sql
+// Easiest: GitHub → Actions → "Import old bookings" → Run workflow (see docs/DEPLOY.md).
+//
+// By hand, straight from the old site's D1 database in the same Cloudflare account:
+//   node scripts/import-legacy.mjs --d1 <old-database-name> legacy-import.sql
+// or from the JSON the old site's /api/admin/cloud-backup page downloads:
+//   node scripts/import-legacy.mjs specone-cloud-d1-backup.json legacy-import.sql
+// then apply it to the new database:
+//   npx wrangler d1 execute DB --remote --file legacy-import.sql
 //
 // The import is idempotent: bookings are matched on their old reference, customers on
 // phone/email and vehicles on registration, so running it twice does not duplicate data.
+// The old database is only read, never changed.
+import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 
-const [input, output = 'legacy-import.sql'] = process.argv.slice(2);
-if (!input) {
-  console.error('Usage: node scripts/import-legacy.mjs <old-backup.json> [output.sql]');
+const args = process.argv.slice(2);
+const fromD1 = args[0] === '--d1' ? args[1] : null;
+const [input, output = 'legacy-import.sql'] = fromD1 ? [null, args[2]] : args;
+if (!fromD1 && !input) {
+  console.error('Usage: node scripts/import-legacy.mjs <old-backup.json> [output.sql]\n   or: node scripts/import-legacy.mjs --d1 <old-database-name> [output.sql]');
   process.exit(1);
 }
-const raw = JSON.parse(await readFile(input, 'utf8'));
-const bookings = Array.isArray(raw) ? raw : raw.bookings ?? raw.tables?.bookings ?? [];
+
+/** Run a read-only query against a remote D1 database through Wrangler and return its rows. */
+function d1Query(database, sql) {
+  const out = execFileSync('npx', ['wrangler', 'd1', 'execute', database, '--remote', '--json', '--command', sql], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+  const parsed = JSON.parse(out.slice(out.indexOf('[')));
+  return parsed.flatMap((r) => r.results ?? []);
+}
+
+// Only the columns the import uses (older versions of the old site lack some of them, and
+// photo columns can be large), so ask the old table which ones it has first.
+const WANTED = ['id', 'booking_ref', 'customer_name', 'customer_email', 'phone', 'address', 'vehicle_size', 'vehicle_details', 'service', 'price', 'date_time', 'notes', 'status', 'service_mode'];
+const columnsOf = (database) => new Set(d1Query(database, 'PRAGMA table_info(bookings)').map((c) => c.name));
+const looksLikeOldSite = (cols) => cols.has('date_time') && cols.has('vehicle_details') && cols.has('customer_name');
+
+/** `--d1 auto`: find the previous site's database among the account's D1 databases. */
+async function detectOldDatabase() {
+  const config = await readFile(new URL('../wrangler.jsonc', import.meta.url), 'utf8');
+  const current = /"database_name"\s*:\s*"([^"]+)"/.exec(config)?.[1];
+  const listOut = execFileSync('npx', ['wrangler', 'd1', 'list', '--json'], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+  const all = JSON.parse(listOut.slice(listOut.indexOf('['))).map((d) => d.name).filter((n) => n && n !== current);
+  const found = [];
+  for (const name of all) {
+    try {
+      if (looksLikeOldSite(columnsOf(name))) found.push(name);
+    } catch {
+      /* not readable or not the old site — skip */
+    }
+  }
+  if (found.length === 1) {
+    console.log(`Found the previous site's database: ${found[0]}`);
+    return found[0];
+  }
+  console.error(found.length
+    ? `More than one database looks like the previous site: ${found.join(', ')}. Run again and type the right name.`
+    : `No database with the previous site's bookings was found (checked: ${all.join(', ') || 'none'}). Run again and type its name.`);
+  process.exit(1);
+}
+
+let bookings;
+let source = input;
+if (fromD1) {
+  const database = fromD1 === 'auto' ? await detectOldDatabase() : fromD1;
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(database)) {
+    console.error(`"${database}" does not look like a D1 database name.`);
+    process.exit(1);
+  }
+  const have = columnsOf(database);
+  if (!looksLikeOldSite(have)) {
+    console.error(`The database "${database}" has no bookings from the previous site. Check the name in Cloudflare → Storage & Databases → D1.`);
+    process.exit(1);
+  }
+  source = `D1 database ${database}`;
+  bookings = d1Query(database, `SELECT ${WANTED.filter((c) => have.has(c)).join(', ')} FROM bookings ORDER BY id`);
+} else {
+  const raw = JSON.parse(await readFile(input, 'utf8'));
+  // Accepts the old site's backup JSON, a plain array of rows, or `wrangler d1 execute --json` output.
+  bookings = Array.isArray(raw) ? (raw[0] && Array.isArray(raw[0].results) ? raw.flatMap((r) => r.results ?? []) : raw) : raw.bookings ?? raw.tables?.bookings ?? [];
+}
 
 const q = (v) => (v == null || v === '' ? "''" : `'${String(v).replace(/'/g, "''")}'`);
 const pence = (v) => Math.round(Number(String(v ?? '').replace(/[^0-9.]/g, '') || 0) * 100);
@@ -42,7 +107,7 @@ const slotOf = (s) => {
 };
 const sizeOf = (s) => (/^s/i.test(String(s ?? '')) ? 'S' : /^l/i.test(String(s ?? '')) ? 'L' : 'M');
 
-const lines = ['-- SpecOne legacy import', `-- Source: ${input}`, `-- Generated: ${new Date().toISOString()}`, ''];
+const lines = ['-- SpecOne legacy import', `-- Source: ${source}`, `-- Generated: ${new Date().toISOString()}`, ''];
 let count = 0;
 for (const b of bookings) {
   const tel = phone(b.phone);

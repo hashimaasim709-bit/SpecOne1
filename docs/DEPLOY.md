@@ -1,19 +1,23 @@
 # Deploying SpecOne Auto Labs
 
-The platform runs on **Cloudflare Workers** with a **D1** (SQLite) database. The free Cloudflare
-plan is enough. Allow about 20 minutes the first time; after that every merge to `main` goes live
-by itself.
+The platform runs on **Cloudflare Workers** with a **D1** (SQLite) database, on your domain
+**speconeautolabs.co.uk**. The free Cloudflare plan is enough. Allow about 20 minutes the first
+time; after that every merge to `main` goes live by itself.
 
 You only need a web browser. Nothing has to be installed on your computer.
+
+**Replacing the previous site:** the first deploy moves speconeautolabs.co.uk (and www) from the
+previous Worker to this one automatically. The previous Worker and its database are left untouched,
+so its bookings can be copied across (step 8) and you can switch back at any time (see the end of
+Part A).
 
 ---
 
 ## Part A — Go live (browser only)
 
-### 1. Create a Cloudflare account
-Sign up free at **dash.cloudflare.com**. Then open **Workers & Pages** in the left menu (it may sit
-under *Compute*). If Cloudflare asks you to choose a `workers.dev` name, pick one, e.g. `specone`.
-Your site will first live at `https://specone-auto-labs.<that-name>.workers.dev`.
+### 1. Cloudflare account
+Use the Cloudflare account that already holds **speconeautolabs.co.uk**. (Starting fresh? Sign up at
+dash.cloudflare.com and add the domain with **Add a site** first.)
 
 ### 2. Make a Cloudflare API token (lets GitHub publish the site)
 1. Go to **dash.cloudflare.com/profile/api-tokens** → **Create Token**.
@@ -36,8 +40,13 @@ GitHub repository → **Settings** → **Secrets and variables** → **Actions**
 
 ### 5. Publish
 Merge the pull request (**Merge pull request** → **Confirm merge**). Open the **Actions** tab and wait
-for the **Deploy** run to show a green tick (about 3 minutes). The first deploy creates the database
-automatically, and the site fills in its full catalogue on the first visit.
+for the **Deploy** run to show a green tick (about 3 minutes). This:
+- creates the new database (`specone-platform-v2`; the site fills in its catalogue on the first visit),
+- publishes the new Worker `specone-auto-labs`,
+- points speconeautolabs.co.uk and www.speconeautolabs.co.uk at it (SSL is automatic; www redirects
+  to the main address).
+
+Returning visitors' phones swap the old installed app for the new one automatically.
 
 ### 6. Set your setup password
 Cloudflare → **Workers & Pages** → **specone-auto-labs** → **Settings** → **Variables and Secrets** →
@@ -45,9 +54,9 @@ Cloudflare → **Workers & Pages** → **specone-auto-labs** → **Settings** �
 It is used once, to prove you own the site.
 
 ### 7. Create your owner account
-Open `https://specone-auto-labs.<your-name>.workers.dev/admin`. Enter the `SETUP_TOKEN` phrase,
-your name, email and a password (10+ characters). Then in **Settings → Security** tap
-**Add this device** to sign in with Face ID or fingerprint.
+Open **https://speconeautolabs.co.uk/admin**. Enter the `SETUP_TOKEN` phrase, your name, email and a
+password (10+ characters). Then in **Settings → Security** tap **Add this device** to sign in with
+Face ID or fingerprint.
 
 Next, in the admin:
 - **Settings → Business**: phone, WhatsApp, email, opening windows, Google review link, social links.
@@ -56,6 +65,25 @@ Next, in the admin:
 - **Services & prices**: check every package price.
 - **Team**: add partner technicians with the Technician role.
 - **Settings → Booking rules → Phone calendar sync**: subscribe on your phone.
+
+### 8. Bring over the previous site's bookings
+GitHub → **Actions** → **Import old bookings** (left-hand list) → **Run workflow** → leave the box
+as `auto` → **Run workflow**. When it shows a green tick, the summary says how many old bookings are
+now in the new site; they appear in Admin → Bookings and Customers.
+
+`auto` finds the previous site's database by itself. If it can't (it says why), type the database's
+name from Cloudflare → **Storage & Databases** → **D1** instead. The old database is only read, and
+running the import again never creates duplicates. No customer details are printed in the logs.
+
+### If the old site still appears
+Wait five minutes and refresh. If it is still there, Cloudflare → **Workers & Pages** → the *old*
+Worker → **Settings** → **Domains & Routes** → delete any entry for speconeautolabs.co.uk, then
+GitHub → **Actions** → **Deploy** → **Run workflow**.
+
+### Switching back to the previous site
+Cloudflare → **Workers & Pages** → the old Worker → **Settings** → **Domains & Routes** → **+ Add** →
+**Custom domain** → `speconeautolabs.co.uk`. Once you are happy with the new site and the old bookings
+are imported, you can delete the old Worker.
 
 ---
 
@@ -73,7 +101,7 @@ Secrets → Add → Secret). Until a key is added the site uses a sensible fallb
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | Automatic SMS with tracker links, review requests, staff dispatch texts | twilio.com → buy a UK number (or alphanumeric sender) |
 | `TWILIO_WHATSAPP_FROM` | Automatic WhatsApp Business messages | Twilio WhatsApp sender (after Meta approval) |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Owner alerts via Telegram instead of / as well as ntfy | @BotFather |
-| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Online deposits and balances with card, **Apple Pay and Google Pay** | Stripe dashboard → Developers. Webhook endpoint: `https://YOUR-DOMAIN/api/stripe/webhook`, events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded` |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Online deposits and balances with card, **Apple Pay and Google Pay** | Stripe dashboard → Developers. Webhook endpoint: `https://speconeautolabs.co.uk/api/stripe/webhook`, events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `charge.refunded` |
 | `GETADDRESS_API_KEY` **or** `IDEAL_POSTCODES_API_KEY` | Street-address dropdown after postcode entry | getaddress.io or ideal-postcodes.co.uk (postcode distance works without either) |
 | `GOOGLE_PLACES_API_KEY` | Daily sync of your Google reviews onto the site | Google Cloud → Places API (New). Also set the Place ID in Admin → Settings → Business |
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Invisible bot protection on booking and enquiry forms | Cloudflare dashboard → Turnstile |
@@ -81,7 +109,9 @@ Secrets → Add → Secret). Until a key is added the site uses a sensible fallb
 | `BACKUP_ENCRYPTION_KEY` | Nightly encrypted backups (needs R2, below) | Any long phrase — keep a copy somewhere safe |
 | `TWA_PACKAGE_NAME`, `TWA_SHA256_FINGERPRINTS` | Full-screen Google Play app | Printed by `npm run twa` |
 
-**Admin → Settings → System** shows which integrations are switched on.
+If the previous Worker had secrets you want to keep (for example `RESEND_API_KEY` or `NTFY_TOPIC`),
+add them to `specone-auto-labs` too — secrets are stored per Worker. **Admin → Settings → System**
+shows which integrations are switched on.
 
 ### R2 storage (videos and cloud backups)
 Photos work out of the box (stored in the database). For video uploads, larger photos and nightly
@@ -89,29 +119,14 @@ encrypted backups: Cloudflare dashboard → **R2** → enable it (Cloudflare ask
 allowance still applies). Then uncomment the `r2_buckets` block in `wrangler.jsonc` and merge.
 The bucket is created automatically on the next deploy.
 
-### Your own domain, SSL and security
-1. Add `speconeautolabs.co.uk` to Cloudflare (**Add a site**) and switch the nameservers at your registrar.
-2. In `wrangler.jsonc` uncomment the `routes` entry, and add `"PUBLIC_ORIGIN": "https://speconeautolabs.co.uk"`
-   to `vars` so links in texts and emails use your domain. Merge. Cloudflare issues the SSL certificate automatically.
-3. Recommended zone settings: **SSL/TLS → Full (strict)**, **Always Use HTTPS**, **HSTS** (the app also sends it), **Bot Fight Mode** on.
-4. **Rate limiting (WAF)** — the app already limits bookings, logins, chat and uploads per visitor. For an
-   extra edge layer add a rule in Security → WAF → Rate limiting rules, e.g. *URI path starts with `/api/`*
-   → 120 requests per minute per IP → Block.
-5. Optional: add a repository **variable** `PUBLIC_URL` (Settings → Secrets and variables → Actions →
-   Variables) so every deploy is followed by an automatic health check.
-
-### Bring over your old bookings
-While signed in on the **old** site, open `/api/admin/cloud-backup` and save the JSON file. Then, on a
-computer with Node.js 20+ and this repository:
-
-```bash
-npm install
-npm run import:legacy -- specone-cloud-d1-backup.json legacy-import.sql
-npx wrangler login
-npx wrangler d1 execute DB --remote --file legacy-import.sql
-```
-
-Customers, vehicles and bookings are recreated. It is safe to run twice.
+### Security settings for the domain
+- Recommended zone settings: **SSL/TLS → Full (strict)**, **Always Use HTTPS**, **HSTS** (the app also
+  sends it), **Bot Fight Mode** on.
+- **Rate limiting (WAF)** — the app already limits bookings, logins, chat and uploads per visitor. For an
+  extra edge layer add a rule in Security → WAF → Rate limiting rules, e.g. *URI path starts with `/api/`*
+  → 120 requests per minute per IP → Block.
+- Optional: add a repository **variable** `PUBLIC_URL` = `https://speconeautolabs.co.uk` (Settings →
+  Secrets and variables → Actions → Variables) so every deploy is followed by an automatic health check.
 
 ### Google Play app
 The site is already an installable app (Add to Home Screen, Android long-press shortcuts, offline
@@ -134,7 +149,7 @@ secrets, then upload the `.aab` in the Play Console. Keep the generated signing 
 - **Rollback**: Cloudflare → Workers & Pages → specone-auto-labs → **Deployments** → pick an earlier
   version → **Rollback**. (Or `npx wrangler rollback`.)
 - **Point-in-time restore**: D1 Time Travel restores the database to any minute in the last 30 days:
-  `npx wrangler d1 time-travel restore specone --timestamp=2026-11-13T10:00:00Z`.
+  `npx wrangler d1 time-travel restore specone-platform-v2 --timestamp=2026-11-13T10:00:00Z`.
 - **Nightly backups** (with R2 + `BACKUP_ENCRYPTION_KEY`): encrypted snapshots in R2 `backups/`, 30 kept.
   Download from Admin → Settings → Backups & data; decrypt with
   `BACKUP_ENCRYPTION_KEY=... npm run backup:decrypt -- file.json.gz.enc`.
@@ -147,6 +162,7 @@ npm install
 npx wrangler login
 npx wrangler secret put SETUP_TOKEN
 npm run deploy           # typecheck + tests + deploy (creates the database on first run)
+npm run import:legacy -- --d1 auto legacy-import.sql && npx wrangler d1 execute DB --remote --file legacy-import.sql
 ```
 
 ## Local development

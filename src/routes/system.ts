@@ -76,6 +76,9 @@ systemRoutes.get('/manifest.webmanifest', async (c) => {
   return c.body(JSON.stringify(manifest), 200, { 'Content-Type': 'application/manifest+json', 'Cache-Control': 'public, max-age=3600' });
 });
 
+// The previous site's manifest address, so phones that installed the old app pick up the new one.
+systemRoutes.get('/manifest.json', (c) => c.redirect('/manifest.webmanifest', 301));
+
 systemRoutes.get('/favicon.ico', async (c) => {
   const settings = await getSettings(c.env.DB);
   if (settings.branding.icon192MediaId) {

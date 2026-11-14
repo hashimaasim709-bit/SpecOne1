@@ -20,6 +20,16 @@ import { runCron } from './services/scheduler';
 
 const app = new Hono<AppEnv>();
 
+// ── One canonical address: www.example.com → example.com (keeps sign-ins and SEO on one host) ──
+app.use('*', async (c, next) => {
+  const url = new URL(c.req.url);
+  if (url.hostname.startsWith('www.')) {
+    url.hostname = url.hostname.slice(4);
+    return c.redirect(url.toString(), 301);
+  }
+  await next();
+});
+
 // ── Request context ──
 app.use('*', async (c, next) => {
   c.set('ip', c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() ?? 'local');

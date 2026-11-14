@@ -1,6 +1,6 @@
 # Copy to .dev.vars for local development (never commit .dev.vars).
 APP_ENV=development
-# PUBLIC_ORIGIN=http://localhost:8787
+PUBLIC_ORIGIN=http://localhost:8787
 # Optional integrations — leave unset to run without them:
 # RESEND_API_KEY=
 # TWILIO_ACCOUNT_SID=

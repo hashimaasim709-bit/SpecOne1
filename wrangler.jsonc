@@ -15,8 +15,10 @@
   // D1 (SQLite). No "database_id" needed: the first `wrangler deploy` creates the
   // database automatically and later deploys reuse it. The Worker creates its own
   // tables on first start, so no separate migration step is required.
+  // The name is deliberately unique: Wrangler would otherwise connect to an existing
+  // database of the same name, such as the previous site's (which has a different shape).
   "d1_databases": [
-    { "binding": "DB", "database_name": "specone", "migrations_dir": "migrations" }
+    { "binding": "DB", "database_name": "specone-platform-v2", "migrations_dir": "migrations" }
   ],
 
   // R2 (optional) adds video uploads, larger photos and nightly encrypted backups.
@@ -34,9 +36,16 @@
   "observability": { "enabled": true },
 
   "vars": {
-    "APP_ENV": "production"
-  }
+    "APP_ENV": "production",
+    // Used in links sent by text, WhatsApp and email.
+    "PUBLIC_ORIGIN": "https://speconeautolabs.co.uk"
+  },
 
-  // Uncomment once the domain is on Cloudflare to attach it (SSL is issued automatically):
-  // "routes": [{ "pattern": "speconeautolabs.co.uk", "custom_domain": true }]
+  // Your domain. On deploy, Cloudflare points these at this Worker (taking them over
+  // from the previous site if needed) and issues the SSL certificates automatically.
+  // www redirects to the main address.
+  "routes": [
+    { "pattern": "speconeautolabs.co.uk", "custom_domain": true },
+    { "pattern": "www.speconeautolabs.co.uk", "custom_domain": true }
+  ]
 }
